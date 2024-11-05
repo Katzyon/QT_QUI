@@ -1,0 +1,2 @@
+stimType,jitter,backgroundFreq,groupFreq,groupSize,groupsNumber,stimTime,onTime,isManualSequence,prob_stim
+Random,False,0.2,0.4,8,2,2,5,False,False

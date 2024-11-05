@@ -1,0 +1,7 @@
+{
+    "files": [
+        "maingui.py",
+        "form.ui",
+        "Protocols.ui"
+    ]
+}

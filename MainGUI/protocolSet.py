@@ -22,9 +22,9 @@ class ProtocolSet():
             #self.images = gui.culture.transform_images # list of DMD images of each cell
             self.images = gui.culture.somaMasks
             self.bridge = gui.core._get_bridge() # get the Java bridge to create Java SLM sequence
-            self.DMDArray = [] # list of Java arrayLists, each arrayList is a sequence of (vectorizred) images to be displayed on the DMD
+            #self.DMDArray = [] # list of Java arrayLists, each arrayList is a sequence of (vectorizred) images to be displayed on the DMD
             
-            print("init protocol set", len(self.images))
+            #print("init protocol set", len(self.images))
             
 
         def extract_protocol(self):
@@ -36,17 +36,17 @@ class ProtocolSet():
             self.data = self.stages_table.values.tolist()
             # extract the number of rows in the dataframe
             self.n_rows = len(self.data) # number of stages in the protocol
+            #self.DMDArray = [[] for _ in range(self.n_rows)] # list of Java arrayLists, each arrayList is a sequence of (vectorizred) images to be displayed on the DMD
 
             self.numberCells = len(self.images)
             self.sequences = [] # list of lists of the sequence of image INDICES to be displayed on the DMD
             self.stages = []    
             
             # Build the sequences of the protocol
-            for index, row in self.stages_table.iterrows():  # iterate over the stages in the protocol  
+            for index, row in self.stages_table.iterrows():  # iterate over the stages (rows) in the protocol  
                 
                 print("stage number:", index, "row: \n", row)
-                stage = Protocol()
-                #stage.append(Protocol()) # create a new stage
+                stage = Protocol(self.bridge)
                 stage.number = index+1 # number of the stage in the protocol sequnce
 
                 # get the stimulation type (stimType)
@@ -56,22 +56,21 @@ class ProtocolSet():
                 # (2, "Order") - repeat the same sequence over and over
                 # (3, "Test") - run the sequence under calcium imaging
                 # (4, "Spontaneous") - randomize stimulation to all cells in the culture (no groups)
-                print("stimType:", stage.stimType)
+                #print("stimType:", stage.stimType)
 
                 # get the group size
                 stage.groupSize = int(row['groupSize'])
                 # get the number of groups
                 stage.groupsNumber = int(row['groupsNumber']) # number of multiple cells groups to be stimulated synchronously 
                 stage.numberCells = self.numberCells # number of detected cells in the culture
-                stage.groupFreq = float(row['groupFreq']) # stimulation frequency in Hz for all the groups (whole sequence cycle)
+                #stage.groupFreq = float(row['groupFreq']) # stimulation frequency in Hz for all the groups (whole sequence cycle)
+                stage.stagePeriod = float(row['stagePeriod']) # period of whole sequence cycle in ms
                 stage.isManual = row['isManualSequence'] # get checkbox selection of isManualSequence
-                print("protocolSet - isManual:", stage.isManual)
+                #print("protocolSet - isManual:", stage.isManual)
 
                 # get the checkbox selection of prob_stim
                 stage.isProbabilityStim = row['prob_stim'] # prob_stim will create a probability distribution of the groups according to the number of groups and predermined probabilities
-
-
-                
+                stage.period = stage.stagePeriod
 
                 # create  groups
                 if stage.isManual: # if the groups are selected manually using the mouse (Click and group button)
@@ -90,8 +89,7 @@ class ProtocolSet():
                         print("pop empty list")
                     
                         
-
-                print("sequence:", sequence)
+                print("protocolSet- sequence:", sequence)
                 self.sequences.append(sequence) # each stage has one list in sequences - for plotting testing
                 
                 
@@ -99,22 +97,20 @@ class ProtocolSet():
                 stage.backgroundFreq = float(row['backgroundFreq'])
 
                 # calculate the stimulation frequency
-                stage.onTime = 5 # ms
+                stage.onTime = int(row['onTime']) # DMD on time in ms for each stimulation
                 stage.backgroundOnTime = 5 # ms
-                # The inter-mask interval is the time 1/groupFreq
                 
                 stage.stimTime = int(row['stimTime']) # stage stimulation running time in minutes
-                stage.cycleTime = 1/stage.groupFreq # one stage cycle time in seconds
+                stage.cycleTime = stage.stagePeriod # one cycle of a stage in seconds
+                stage.sequence = sequence # list of each group indices of the cells to be stimulated in a sequence
 
                 stage.calc_interMaskInterval() # ms - should be a parameter in the Protocol.py (also a class)
 
-                stage.sequence = sequence
-                #print("stage:", stage)
 
-                print("stage num: ", index, "; repeats:", stage.sequenceRepeats)
+                print("stage num: ", index+1, "; repeats:", stage.sequenceRepeats)
 
                 self.stages.append(stage)
-                print("protocolSet-stages: sequence", self.stages[index].sequence)
+                #print("protocolSet-stages: sequence", self.stages[index].sequence)
 
 
             #print(self)
@@ -138,34 +134,54 @@ class ProtocolSet():
 
             # create the sequence of images to be displayed on the DMD
             self.sequences_images = []
-            javaarray = self.bridge._construct_java_object('java.util.ArrayList')
+            
             for idx, stage in enumerate(self.sequences): # iterate over the stages in the protocol
                 #print("idx", idx)
-                
+
+
                 # TODO:
                 # IF probability stimulation is checked - create a distribution of the groups according to the number of groups
                 # Add black image at the end of the sequence
                 # self.black_image = np.zeros((self.core.getSLMHeight(self.dmd_name),
                 #             self.core.getSLMWidth(self.dmd_name)), dtype=np.uint8)
-
-                self.DMDArray.append(javaarray)
+                javaarray = self.bridge._construct_java_object('java.util.ArrayList') # create a Java array list - each row is a vectorized image
+                #self.DMDArray = javaarray  # Store the Java ArrayList for the current stage
                 sequence_images = []
+                group_sum = []
+
                 for group in stage: # group is a list of cells either of size 1 or larger
                     group_images = []
-                    for cell in group:
+                    for cell in group: # [1, 3, 11] - list of cells in the group
                         group_images.append(self.images[cell - 1])
+
                     # sum the images in the group
                     group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
                     sequence_images.append(group_sum) # add one image to the sequence
-                    
-                    # add the image to the Java array
-                    #print(type(group_sum))
-                    self.DMDArray[idx].add(group_sum.ravel()) # add the image to the Java array
+
+                    self.stages[idx].DMDArray.add(group_sum.ravel()) # add the image to the Java array - used.add didn't work
+                    #self.DMDArray.append(group_sum.ravel()) # add the image to the Java array - used.add didn't work
+                    #print("num of images in DMArray", len(self.DMDArray[idx]))
+
+
+                    #print("group type", type(group_sum))
+                    group_sum_ravel = group_sum.ravel()  # Flatten the image (if needed)
+                    #print("to_lsit type", type(group_sum_ravel.tolist()))
+
+
+                    # print("Number of images in DMDArray:", self.DMDArray[idx].size())
+                    # print("n images in sum", len(group_sum))
+                    #print(f"Number of images in DMDArray[{idx}]:", javaarray.size())
+                    #print(f"Size of group_sum (flattened): {len(group_sum_ravel)}")
+
                 self.sequences_images.append(sequence_images) # add one sequence to the list of sequences
-            
+                # Debugging outputs
+                print(f"Stage {idx}: Sequence {stage}, Number of groups: {len(stage)}")
+
 
             # print the number of sequences in the protocol
-            print("number of sequences in the protocol:", len(self.sequences_images), "create_stimulation_sequence")
+            print(f"Number of sequences in the protocol: {len(self.sequences_images)} (create_stimulation_sequence)")
+
+            
 
             # print all attributes of self.prot object
             # for attr, value in vars(self.stages).items():
@@ -205,7 +221,7 @@ class ProtocolSet():
             #self.remaining_cells = [[item] for item in all_cells]
             
             # create one list of the remaining cells
-            print("create groups", self.groups)
+            print("created groups", self.groups)
             self.remaining_cells = [all_cells]
 
 

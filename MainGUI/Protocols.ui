@@ -88,8 +88,8 @@
   <widget class="QPushButton" name="addStage">
    <property name="geometry">
     <rect>
-     <x>680</x>
-     <y>190</y>
+     <x>760</x>
+     <y>200</y>
      <width>75</width>
      <height>24</height>
     </rect>
@@ -146,9 +146,9 @@
      </widget>
     </item>
     <item row="2" column="6">
-     <widget class="QLineEdit" name="groupFreq">
+     <widget class="QLineEdit" name="stagePeriod">
       <property name="text">
-       <string>1</string>
+       <string>200</string>
       </property>
      </widget>
     </item>
@@ -162,9 +162,9 @@
     <item row="0" column="6">
      <widget class="QLabel" name="label_6">
       <property name="text">
-       <string>sequence cycle 
- Stimulation 
- Freq.</string>
+       <string>Stage period 
+ (ms) 
+</string>
       </property>
      </widget>
     </item>

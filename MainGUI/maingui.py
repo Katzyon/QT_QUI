@@ -40,7 +40,7 @@ from PySide6.QtCore import Slot
 
 
 # Important:
-# You need to run the following command to generate the ui_form.py file
+# You need to run the following command to generate the ui_form.py file (in Python terminal at the (pattern) environment):
 #     cd("G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI")
 #     pyside6-uic form.ui -o form_ui.py
 #     cd G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI  
@@ -57,7 +57,8 @@ from pycromanager import Core
 # sys.path.append("g:\\My Drive\\Research\\Projects\\Theory of cortical mind\\Object representation\\Software\\Python\\QTlearn\\CamMovie")
 from protocol_design import protocol_set # import the protocol_set class from the protocol_design.py file
 # import Camera from QTlearn/CamMovie/ folder
-import Camera, MovThread
+import Camera, MovThread_signal
+import Polygon
 
 
 import DMDCalibrate as dc  # Calibrate DMD position with camera image
@@ -69,7 +70,7 @@ import DetectCells_thread as dct # detect cells using cellpose
 from AllSomaQTimer import SomaStimulationWorker
 import GUI_createMasks as gcm
 from culture_data import Culture # import the Culture class
-
+import serial # for serial communication with the Arduino COM13 that triggers the DMD, light source, and MaxOne digipins.
 
 #import CreateMasks
 # import DetectSomas
@@ -81,77 +82,49 @@ class MainGui(QMainWindow, Ui_MainGui): #
         
         self.setupUi(self) # setup the GUI from Ui_MainGui via the ui_form.py file
         self.stopProtocol.setVisible(False) # or True
-        try:
-            self.core = Core(convert_camel_case=False) # keep the Java names as they are in CamelCase not snake_case
-            self.camera = Camera.getImage(self.core) # create the camera object
-        except:
-            # popout a window to show the error message
-            self.show_error_message("core error","Micro-manager core cannot be initialized - open Micro-manager first")
-            
+
+        # Initialize core attributes
+        self.core = None
+        self.camera = None
+        self.polygon = None
+        self.monitor = None
+        self.working_dir = None
+        self.image_dir = None
+        self.DMD_dir = None
+        self.DMD_group_masks = None
+        self.culture_dir = None
+        self.culture = None
+        self.stages_table = pd.DataFrame()
+        self.manualSequence = []    
         self.monitor = get_monitors()[0]
-        #self.screen_width, self.screen_height = self.monitor.width, self.monitor.height
-
+        # Arduino loaded with file: Serial_trig_randvec_light_delay.ino
+        self.arduino_port = 'COM13' # Arduino port to trigger the DMD, light source, and MaxOne digipins
         
-        # Connect all buttons to their functions
-        self.snap.clicked.connect(self.snap_image) # Snap image
-        self.live.clicked.connect(self.live_movie) # Live movie
-        self.live.clicked.connect(self.change_color_run)
-        self.stop_movie.clicked.connect(self.change_color_stop) # Stop movie
-        self.somasStims.clicked.connect(self.stim_from_dir) # connect somsStims to AllSomaStim function
-        self.DMD_Calibrate.clicked.connect(self.DMD_Calibratiom) # DMDCalibrate
-        self.mouse_shoot.clicked.connect(self.mouse_DMD_shoot) # mouse_shoot clicked
-        self.binning.currentIndexChanged.connect(self.binning_set) # connect binning combo box to binning function
-        self.exposureT.returnPressed.connect(self.exposure_set) # connect exposure line edit to exposure function
-        self.detectCells.clicked.connect(self.detect_Cells) # connect detectCells button to detectCells function
-        self.ManualGroup.clicked.connect(self.manual_masks) # connect ManualGroup button to manual_masks function
-        self.RandGroup.clicked.connect(self.save_group_masks) # connect RandGroup button to random_masks function
-        self.createProtocol.clicked.connect(self.protocols_window) # Opens create protocol window # connect self.protocolsB button to protocols window open
-        self.loadProtocol.clicked.connect(self.load_protocol) # connect loadProtocol button to load protocol from file
-        self.runProtocol.clicked.connect(self.run_protocol) # connect runProtocol button to run protocol
-        self.stopProtocol.clicked.connect(self.stop_protocol) # connect stopProtocol button to stop protocol
-        self.loadTest.clicked.connect(self.load_test_culture) # connect loadTest button to load test culture
-
-
-        # create new working directory for the current session at D:\DATA. The directory name starts with Patterns followed by the current date
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        self.working_dir = r"D:\DATA\Patterns" + "\\Patt_" + current_date
-        print("Working dir: ", self.working_dir)
-
-
-        # create the working directory if it doesn't exist
-        if not os.path.exists(self.working_dir): 
-            print("Creating new working directory")
-        
-        # create the directories for the experimental files
-            self.image_dir =  self.working_dir + "\\Images"
-            self.DMD_dir = self.working_dir + "\\DMD"
-            self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
-            self.culture_dir = self.working_dir + "\\Culture"
-            
-            os.makedirs(self.working_dir)
-            os.makedirs(self.image_dir)
-            os.makedirs(self.DMD_dir)
-            os.makedirs(self.DMD_group_masks)
-            os.makedirs(self.culture_dir)
-
-            print("creating Culture")
-            # initialize culture list variable and save it in the culture directory
-            self.culture = Culture(current_date, self.culture_dir) # in the future might have couple of cultures in the same day
-            self.culture.date = current_date
-            self.culture.save()
-            print("Culture created")
-
-        # else: # to be deleted in the future - just for testing when starting the same session many times
-        #     self.image_dir = self.working_dir + "\\Images" 
-        #     self.DMD_dir = self.working_dir + "\\DMD"
-        #     self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
-
         # Create empty protocols table
         self.stages_table = pd.DataFrame()
         self.manualSequence = [] # list of lists of cells to be selected manually
 
+        self.initialize()
+
+    def initialize(self):
+        self.initialize_core()
+        self.setup_directories()
+        self.connect_buttons()
+        # connect to Arduino
+        self.connect_arduino(port=self.arduino_port, baudrate=19200, timeout=2)
+
         # Load the affine transformation matrix from the last saved calibration
         self.load_old_affine()
+
+
+    def initialize_core(self):
+     try:
+         self.core = Core(convert_camel_case=False)
+         self.camera = Camera.getImage(self.core)
+         self.polygon = Polygon.Polygon(self.core)
+         print("Core initialized successfully")
+     except Exception as e:
+         self.show_error_message("Core Error", f"Micro-manager core cannot be initialized - open Micro-manager: {e}")
 
         # Access the ImageView placeholder and set data
         #self.imageView = self.ui.imageview # get the widget promoted to imageview object from the ui_form.py file
@@ -162,7 +135,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
     def live_movie(self):
         # create MovieThread object if it doesn't exist
         if not hasattr(self, 'movie_thread'):
-            self.movie_thread = MovThread.MovieThread(self)
+            self.movie_thread = MovThread_signal.MovieThread(self)
             print("live_movie - movie_thread created")
             self.stop_movie.clicked.connect(self.movie_thread.stop)
             self.movie_thread.start()
@@ -262,6 +235,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # save the averaged image (self.averageImage) at self.image_dir
         # if user opens the gui twice in the same day - it gives an error because the directory already exists
         # solve the problem...
+        print("Saving image to: ", self.image_dir)
         self.camera.saveImage(self.averageImage, self.image_dir)
 
         # Detecting cell bodies
@@ -401,8 +375,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         # create masks for each group
         
-
-
         
 # Click and group button - manual grouping of cells
     def manual_masks(self):
@@ -515,7 +487,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
     def load_protocol(self):
         from protocolLoader import ProtocolLoader as pl
         
-
         file_loader_dialog = pl(self)
         file_loader_dialog.signalOutData.connect(self.handleLoadedData) # signalOutData = Signal(object) # signal to send the dataframe to the main window
         file_loader_dialog.exec() # 
@@ -530,14 +501,17 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print("self.prot.stages.numberCells: ", self.prot.stages[0].numberCells)
         print("self.prot.stages.repeats: ", self.prot.stages[0].sequenceRepeats)
         self.prot.create_stimulation_sequence() # in ps.ProtocolSet
+
         # print the size of sequences_images in prot object
-        print("self.prot.stages.sequences_images[0] length: ", len(self.prot.sequences_images[0]))
+        for i in range(len(self.prot.sequences_images)):
+            print("self.prot.stages.sequences_images ", i, " length: ", len(self.prot.sequences_images[i]))
 
     
 
     def run_protocol(self):
         from runProtocol import ProtocolRunner
 
+        
         
         self.stopProtocol.setVisible(True) # make the stopProtocol button visible
         # check if a protocol is loaded
@@ -548,9 +522,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("Protocol set")
             print(self.stages_table)
 
-            # check that the protocol is not running
-            #if not self.protocol_runner.isRunning():
-                # run the protocol
+            #print("DMDArray size", len(self.prot.stages[0].DMDArray))
+            # run the protocol
             self.protocol_runner = ProtocolRunner(self)
             self.protocol_runner.start() # run the protocol
             #self.protocol_runner.protocolFinishSignal.connect(self.cleanupProtocolRunner)
@@ -578,7 +551,76 @@ class MainGui(QMainWindow, Ui_MainGui): #
             self.culture = pickle.load(input)
         print("Culture with", self.culture.cellsNumber , "cells loaded")
 
+
+    def setup_directories(self):
+        # create new working directory for the current session at D:\DATA. The directory name starts with Patterns followed by the current date
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        self.working_dir = r"D:\DATA\Patterns" + "\\Patt_" + current_date
+        print("Working dir: ", self.working_dir)
+
+
+        # create the working directory if it doesn't exist
+        if not os.path.exists(self.working_dir): 
+            
         
+        # create the directories for the experimental files
+            self.image_dir =  self.working_dir + "\\Images"
+            print("Image dir: ", self.image_dir)
+            self.DMD_dir = self.working_dir + "\\DMD"
+            self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
+            self.culture_dir = self.working_dir + "\\Culture"
+            
+            os.makedirs(self.working_dir)
+            os.makedirs(self.image_dir)
+            os.makedirs(self.DMD_dir)
+            os.makedirs(self.DMD_group_masks)
+            os.makedirs(self.culture_dir)
+
+  
+            # initialize culture list variable and save it in the culture directory
+            self.culture = Culture(current_date, self.culture_dir) # in the future might have couple of cultures in the same day
+            self.culture.date = current_date
+            self.culture.save()
+            # notify the user that the directories are created
+            print(f"Directories created:\n{self.working_dir}\n{self.image_dir}\n{self.DMD_dir}\n{self.DMD_group_masks}\n{self.culture_dir}")
+
+
+        # else: # to be deleted in the future - just for testing when starting the same session many times
+        #     self.image_dir = self.working_dir + "\\Images" 
+        #     self.DMD_dir = self.working_dir + "\\DMD"
+        #     self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
+
+
+    def connect_buttons(self):
+        self.snap.clicked.connect(self.snap_image)
+        self.live.clicked.connect(self.live_movie)
+        self.live.clicked.connect(self.change_color_run)
+        self.stop_movie.clicked.connect(self.change_color_stop) # Stop movie
+        self.somasStims.clicked.connect(self.stim_from_dir) # connect somsStims to AllSomaStim function
+        self.DMD_Calibrate.clicked.connect(self.DMD_Calibratiom) # DMDCalibrate
+        self.mouse_shoot.clicked.connect(self.mouse_DMD_shoot) # mouse_shoot clicked
+        self.binning.currentIndexChanged.connect(self.binning_set) # connect binning combo box to binning function
+        self.exposureT.returnPressed.connect(self.exposure_set) # connect exposure line edit to exposure function
+        self.detectCells.clicked.connect(self.detect_Cells) # connect detectCells button to detectCells function
+        self.ManualGroup.clicked.connect(self.manual_masks) # connect ManualGroup button to manual_masks function
+        self.RandGroup.clicked.connect(self.save_group_masks) # connect RandGroup button to random_masks function
+        self.createProtocol.clicked.connect(self.protocols_window) # Opens create protocol window # connect self.protocolsB button to protocols window open
+        self.loadProtocol.clicked.connect(self.load_protocol) # connect loadProtocol button to load protocol from file
+        self.runProtocol.clicked.connect(self.run_protocol) # connect runProtocol button to run protocol
+        self.stopProtocol.clicked.connect(self.stop_protocol) # connect stopProtocol button to stop protocol
+        self.loadTest.clicked.connect(self.load_test_culture) # connect loadTest button to load test culture
+
+    def connect_arduino(self, port='COM13', baudrate=19200, timeout=2):
+
+        try:
+            self.arduino = serial.Serial(port, baudrate, timeout=timeout)
+            print("Arduino connected.")
+        except serial.SerialException as e:
+            print(f"Error connecting to Arduino: {e}")
+            self.arduino = None
+            return False
+        return True
+
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Protocols.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.5.1
+## Created by: Qt User Interface Compiler version 6.8.0
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -47,7 +47,7 @@ class Ui_protocols(object):
         self.label_4.setGeometry(QRect(330, 240, 101, 16))
         self.addStage = QPushButton(protocols)
         self.addStage.setObjectName(u"addStage")
-        self.addStage.setGeometry(QRect(680, 190, 75, 24))
+        self.addStage.setGeometry(QRect(760, 200, 75, 24))
         self.ncells = QLabel(protocols)
         self.ncells.setObjectName(u"ncells")
         self.ncells.setGeometry(QRect(150, 50, 49, 16))
@@ -72,10 +72,10 @@ class Ui_protocols(object):
 
         self.gridLayout.addWidget(self.label_9, 0, 1, 1, 1)
 
-        self.groupFreq = QLineEdit(self.layoutWidget)
-        self.groupFreq.setObjectName(u"groupFreq")
+        self.stagePeriod = QLineEdit(self.layoutWidget)
+        self.stagePeriod.setObjectName(u"stagePeriod")
 
-        self.gridLayout.addWidget(self.groupFreq, 2, 6, 1, 1)
+        self.gridLayout.addWidget(self.stagePeriod, 2, 6, 1, 1)
 
         self.groupsNumber = QLineEdit(self.layoutWidget)
         self.groupsNumber.setObjectName(u"groupsNumber")
@@ -109,6 +109,7 @@ class Ui_protocols(object):
         self.stimType.addItem("")
         self.stimType.addItem("")
         self.stimType.setObjectName(u"stimType")
+        self.stimType.setFrame(True)
 
         self.gridLayout.addWidget(self.stimType, 2, 1, 1, 1)
 
@@ -221,11 +222,11 @@ class Ui_protocols(object):
 #endif // QT_CONFIG(whatsthis)
         self.label_10.setText(QCoreApplication.translate("protocols", u"Jitter", None))
         self.label_9.setText(QCoreApplication.translate("protocols", u"Type", None))
-        self.groupFreq.setText(QCoreApplication.translate("protocols", u"1", None))
+        self.stagePeriod.setText(QCoreApplication.translate("protocols", u"200", None))
         self.groupsNumber.setText(QCoreApplication.translate("protocols", u"1", None))
-        self.label_6.setText(QCoreApplication.translate("protocols", u"sequence cycle \n"
-" Stimulation \n"
-" Freq.", None))
+        self.label_6.setText(QCoreApplication.translate("protocols", u"Stage period \n"
+" (ms) \n"
+"", None))
         self.groupsNumbers.setText(QCoreApplication.translate("protocols", u"Number of \n"
 " groups", None))
         self.groupSize.setText(QCoreApplication.translate("protocols", u"12", None))

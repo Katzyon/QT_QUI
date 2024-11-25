@@ -1,3 +1,0 @@
-stimType,jitter,backgroundFreq,groupFreq,groupSize,groupsNumber,stimTime,onTime,isManualSequence,prob_stim
-Random,False,1,1,12,5,5,5,False,False
-Random,False,1,1,30,2,1,5,False,False

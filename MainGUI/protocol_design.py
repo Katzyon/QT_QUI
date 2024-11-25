@@ -72,7 +72,7 @@ class protocol_set(QDialog, Ui_protocols):
             "stimType": self.stimType.currentText(),
             "jitter": self.jitter.isChecked(),
             "backgroundFreq": self.backgroundFreq.text(),
-            "groupFreq": self.groupFreq.text(), # stimulation frequency in Hz for each group (whole sequence cycle)
+            "stagePeriod": self.stagePeriod.text(), # stimulation frequency in Hz for each group (whole sequence cycle)
             "groupSize": self.groupSize.text(),
             "groupsNumber": self.groupsNumber.text(), # number of groups
             "stimTime": self.stimTime.text(),

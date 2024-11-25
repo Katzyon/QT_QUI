@@ -1,0 +1,6 @@
+{
+    "port": "COM13",
+    "board": "arduino:avr:uno",
+    "programmer": "avrispmkii",
+    "sketch": "MainGUI\\System_trigger\\System_trigger.ino"
+}

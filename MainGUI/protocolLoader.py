@@ -28,6 +28,11 @@ class ProtocolLoader(QDialog):
         self.layout.addWidget(self.loadButton)
         self.loadButton.clicked.connect(self.loadFile)
 
+        # add a button to edit the selected csv file
+        self.editButton = QPushButton("Edit Protocol", self)
+        self.layout.addWidget(self.editButton)
+        self.editButton.clicked.connect(self.editFile)
+
 
         # Populate the list with CSV files
         self.populateList()
@@ -58,7 +63,12 @@ class ProtocolLoader(QDialog):
         # close the dialog
         self.close()
 
-    
+    def editFile(self):
+        """Edit the selected file"""
+        selected_item = self.listWidget.currentItem()
+        file_name = selected_item.text()
+        file_path = os.path.join(r"G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI\Protocols", file_name)
+        os.system(f"notepad {file_path}")
 
 if __name__ == "__main__":
     app = QApplication([])

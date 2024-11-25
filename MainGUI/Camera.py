@@ -137,8 +137,6 @@ class getImage:  # called by init_window.py
         normalized_image.save(image_dir + "/image.tif")
 
 
-            
-
 
     def init_devices(self):
         # set the camera trigger to Edge Trigger

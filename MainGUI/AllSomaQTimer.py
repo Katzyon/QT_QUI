@@ -1,11 +1,14 @@
-# Started following button press on 'Stimulate all cells'. 
-# It activate the DMD and project sequencialy single soma masks from the list self.binary_images
-
+""" Started following button press on 'Stimulate all cells'. 
+ It activate the DMD and project sequencialy single soma masks from the list self.binary_images
+"""
 
 import numpy as np
 from PySide6.QtCore import QThread, Signal, QTimer, Slot
 
 class SomaStimulationWorker(QThread):
+    """Worker thread for stimulating somas with the DMD.
+    Sequencially projects the soma masks from the list self.binary_images.
+    """
     finishedStimulation = Signal()
 
     def __init__(self, gui, parent=None):

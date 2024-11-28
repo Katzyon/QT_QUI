@@ -99,7 +99,8 @@ class ProtocolRunner(QThread):
                     self.randomizeSequence(javaSequence) # randomize the sequence of images
                     self.core.loadSLMSequence(self.dmd_name, self.Randjavaarray) # load the sequence to the DMD
                     
-                    # wait 10 ms for the DMD to load the sequence
+                    # wait 10 ms for the DMD to load the sequence - if the sequence is long - need to adjust the time accordingly, How? 
+                    
                     self.msleep(10)
                     
                     #print("image repeats:", self.stages[index].imageRepeats)

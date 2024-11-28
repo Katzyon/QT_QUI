@@ -9,6 +9,9 @@ import Display_image as di
 
 # ImageLabel class is used to display the user clicks on the image and produce corresponding DMD images
 class ImageLabel(QLabel):
+    """A QLabel that can display a the user click on the image
+    It produces corresponding image to light stimulate the selected point ."""
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_point = None

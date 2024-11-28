@@ -8,6 +8,7 @@ from PIL import Image
 import os
 
 class getImage:  # called by init_window.py
+    """Class to get an image from the camera using pycromanager Core object."""
     def __init__(self, core):
         super().__init__() # inherit from the parent class
     

@@ -28,7 +28,7 @@ class CellPickerWidget(QWidget):
         super().closeEvent(event)
 
 
-class CellPicker(QObject):
+class CellPicker(QObject): # 
 
     groups_ready = Signal(list) # Signal to emit groups when they are updated in the GUI
 

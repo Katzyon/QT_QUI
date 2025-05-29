@@ -45,17 +45,18 @@ def generate_padded_checkerboard(rows, cols, square_size, target_width, target_h
 # get the core object
 def dmd_calibrate(gui):
         
+
         core = gui.core
         print("DMD_Calibrate pressed")
-        dmd_name = core.getSLMDevice() # get_slm_device() #'MightexPolygon1000' 
+        dmd_name = core.get_slm_device()  # formerly getSLMDevice()
         print("DMD name: ", dmd_name)
-        slm_width = core.getSLMWidth(dmd_name)
-        slm_height = core.getSLMHeight(dmd_name)
+        slm_width = core.get_slm_width(dmd_name)  # formerly getSLMWidth()
+        slm_height = core.get_slm_height(dmd_name)  # formerly getSLMHeight()
         print("SLM height: ", slm_height, "SLM width: ", slm_width)
         core.slm_width = slm_width
         core.slm_height = slm_height
-        core.camera_width = core.getImageWidth()
-        core.camera_height = core.getImageHeight()
+        core.camera_width = core.get_image_width()  # formerly getImageWidth()
+        core.camera_height = core.get_image_height()  # formerly getImageHeight()
 
         # checkerboard dimensions - number of rectangles
         rows = 6
@@ -67,12 +68,12 @@ def dmd_calibrate(gui):
         
 
         #core.set_slm_image(dmd_name, mask)
-        core.setSLMImage(dmd_name, mask) # compensate for the distortion of the projector
-        core.displaySLMImage(dmd_name)
+        core.set_slm_image(dmd_name, mask)  # formerly setSLMImage()
+        core.display_slm_image(dmd_name)   # formerly displaySLMImage()
         time.sleep(1)
 
-        core.snapImage()
-        tagged_image = core.getTaggedImage() # the image is 1D array
+        core.snap_image()  # fix typo: snap_mage → snap_image
+        tagged_image = core.get_tagged_image()  # formerly getTaggedImage()
         #print("tagged_image shape: ", tagged_image.pix.shape)
         #frame = core.camera.snapImage(self.core)
         pixels = np.reshape(tagged_image.pix,
@@ -91,8 +92,8 @@ def dmd_calibrate(gui):
         #print(os.getcwd())
 
         # clear the SLM image
-        core.setSLMImage(dmd_name, np.zeros((slm_width, slm_height), dtype=np.uint8))
-        core.displaySLMImage(dmd_name)
+        core.set_slm_image(dmd_name, np.zeros((slm_width, slm_height), dtype=np.uint8))
+        core.display_slm_image(dmd_name)
 
         # Display the image
         fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
@@ -134,10 +135,6 @@ def dmd_calibrate(gui):
                 print("Affine transform: ", core.affine_transform)
 
                 
-
-                
-
-
                 # Apply the transformation to visualize align image supposedly coming from the DMD
                 transformed_image = cv2.warpAffine(camimg, core.affine_transform, (dmd.shape[1], dmd.shape[0]))
         else:
@@ -265,18 +262,18 @@ class ClickCollectorsss():
         transformed_img = cv2.warpAffine(click_image, self.core.affine_transform, (self.core.slm_width, self.core.slm_height))
 
         # Display the transformed image on the DMD
-        self.core.setSLMImage(self.core.dmd_name, transformed_img)
-        self.core.displaySLMImage(self.core.dmd_name)
+        self.core.set_slm_image(self.core.dmd_name, transformed_img)
+        self.core.display_slm_image(self.core.dmd_name)
 
         # take a picture with the camera
-        self.core.snapImage()
-        tagged_image = self.core.getTaggedImage()
+        self.core.snap_image()
+        tagged_image = self.core.get_tagged_image()
         pixels = np.reshape(tagged_image.pix,
                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
         # turn of the SLM pixels
         time.sleep(0.2)
-        self.core.setSLMImage(self.core.dmd_name, np.zeros((self.core.slm_width, self.core.slm_height), dtype=np.uint8))
-        self.core.displaySLMImage(self.core.dmd_name)
+        self.core.set_slm_image(self.core.dmd_name, np.zeros((self.core.slm_width, self.core.slm_height), dtype=np.uint8))
+        self.core.display_slm_image(self.core.dmd_name)
         time.sleep(0.2)
         # Display the image in ax2
         self.ax2.imshow(pixels, cmap='gray')

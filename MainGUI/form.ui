@@ -53,8 +53,8 @@
    <widget class="QPushButton" name="DMD_Calibrate">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>580</y>
+      <x>290</x>
+      <y>590</y>
       <width>91</width>
       <height>24</height>
      </rect>
@@ -82,8 +82,8 @@
    <widget class="QPushButton" name="mouse_shoot">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>450</y>
+      <x>30</x>
+      <y>250</y>
       <width>91</width>
       <height>24</height>
      </rect>
@@ -154,34 +154,38 @@
    <widget class="QLabel" name="label_3">
     <property name="geometry">
      <rect>
-      <x>40</x>
-      <y>170</y>
-      <width>49</width>
-      <height>16</height>
+      <x>30</x>
+      <y>90</y>
+      <width>91</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
-     <string>n images</string>
+     <string>Soma n images 
+ to average </string>
     </property>
    </widget>
    <widget class="QLineEdit" name="nAverage">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>170</y>
+      <x>140</x>
+      <y>100</y>
       <width>41</width>
       <height>22</height>
      </rect>
     </property>
+    <property name="toolTip">
+     <string extracomment="number of images to average before soma detection"/>
+    </property>
     <property name="text">
-     <string>10</string>
+     <string>16</string>
     </property>
    </widget>
    <widget class="QPushButton" name="detectCells">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>260</y>
+      <x>30</x>
+      <y>180</y>
       <width>151</width>
       <height>24</height>
      </rect>
@@ -196,8 +200,8 @@
    <widget class="QLabel" name="label_4">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>210</y>
+      <x>30</x>
+      <y>130</y>
       <width>81</width>
       <height>16</height>
      </rect>
@@ -209,8 +213,8 @@
    <widget class="QLineEdit" name="minsize">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>230</y>
+      <x>30</x>
+      <y>150</y>
       <width>31</width>
       <height>22</height>
      </rect>
@@ -222,8 +226,8 @@
    <widget class="QLineEdit" name="maxsize">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>230</y>
+      <x>70</x>
+      <y>150</y>
       <width>31</width>
       <height>22</height>
      </rect>
@@ -235,8 +239,8 @@
    <widget class="QPushButton" name="somasStims">
     <property name="geometry">
      <rect>
-      <x>120</x>
-      <y>450</y>
+      <x>30</x>
+      <y>290</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -251,11 +255,14 @@
    <widget class="QPushButton" name="ManualGroup">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>500</y>
+      <x>30</x>
+      <y>330</y>
       <width>101</width>
       <height>24</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="Create manual groups using a mouse click on the image"/>
     </property>
     <property name="whatsThis">
      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually grouping detected cells by mouse click&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -267,8 +274,8 @@
    <widget class="QLabel" name="label_5">
     <property name="geometry">
      <rect>
-      <x>140</x>
-      <y>210</y>
+      <x>120</x>
+      <y>130</y>
       <width>111</width>
       <height>16</height>
      </rect>
@@ -280,8 +287,8 @@
    <widget class="QLineEdit" name="cellpose_diameter">
     <property name="geometry">
      <rect>
-      <x>160</x>
-      <y>230</y>
+      <x>140</x>
+      <y>150</y>
       <width>41</width>
       <height>22</height>
      </rect>
@@ -293,8 +300,8 @@
    <widget class="QPushButton" name="RandGroup">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>540</y>
+      <x>30</x>
+      <y>370</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -306,8 +313,8 @@
    <widget class="QLineEdit" name="group_size">
     <property name="geometry">
      <rect>
-      <x>140</x>
-      <y>540</y>
+      <x>150</x>
+      <y>370</y>
       <width>31</width>
       <height>22</height>
      </rect>
@@ -319,8 +326,8 @@
    <widget class="QLabel" name="label_6">
     <property name="geometry">
      <rect>
-      <x>140</x>
-      <y>520</y>
+      <x>150</x>
+      <y>350</y>
       <width>61</width>
       <height>16</height>
      </rect>
@@ -332,8 +339,8 @@
    <widget class="QPushButton" name="createProtocol">
     <property name="geometry">
      <rect>
-      <x>420</x>
-      <y>440</y>
+      <x>230</x>
+      <y>230</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -345,8 +352,8 @@
    <widget class="QPushButton" name="loadProtocol">
     <property name="geometry">
      <rect>
-      <x>420</x>
-      <y>470</y>
+      <x>230</x>
+      <y>260</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -358,8 +365,8 @@
    <widget class="QPushButton" name="runProtocol">
     <property name="geometry">
      <rect>
-      <x>420</x>
-      <y>500</y>
+      <x>230</x>
+      <y>290</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -371,8 +378,8 @@
    <widget class="QPushButton" name="loadTest">
     <property name="geometry">
      <rect>
-      <x>300</x>
-      <y>470</y>
+      <x>230</x>
+      <y>390</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -384,8 +391,8 @@
    <widget class="QPushButton" name="stopProtocol">
     <property name="geometry">
      <rect>
-      <x>420</x>
-      <y>530</y>
+      <x>230</x>
+      <y>320</y>
       <width>111</width>
       <height>24</height>
      </rect>
@@ -394,6 +401,157 @@
      <string>Stop protocol</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="testGroup">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>360</y>
+      <width>111</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string extracomment="The test group is the group that is not being patterned stimulated"/>
+    </property>
+    <property name="text">
+     <string>Set Test group</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="light_click_pixels_size">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>250</y>
+      <width>41</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>10</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>230</y>
+      <width>81</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Light pixel size</string>
+    </property>
+   </widget>
+   <widget class="QGroupBox" name="groupBox">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>440</y>
+      <width>251</width>
+      <height>171</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Stage</string>
+    </property>
+    <widget class="QWidget" name="">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>20</y>
+       <width>218</width>
+       <height>150</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QPushButton" name="update_stage">
+        <property name="toolTip">
+         <string extracomment="press the button to update stage position"/>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Run SLM stimulation to all detected somas in the DMD_dir&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Update stage position</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="stage_position">
+        <property name="font">
+         <font>
+          <pointsize>14</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>0,0</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="zero_stage">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually grouping detected cells by mouse click&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Zero stage pos.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="move_stage">
+        <property name="toolTip">
+         <string extracomment="press the button to update stage position"/>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Run SLM stimulation to all detected somas in the DMD_dir&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Move to coordinates</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLabel" name="label_8">
+          <property name="text">
+           <string>X</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="xpos">
+          <property name="text">
+           <string>10</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_9">
+          <property name="text">
+           <string>Y</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="ypos">
+          <property name="text">
+           <string>10</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -401,7 +559,7 @@
      <x>0</x>
      <y>0</y>
      <width>1300</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuTab">

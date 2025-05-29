@@ -12,11 +12,11 @@ class SerialArduinoTriggers:
         self.running = True
         self.arduino = None
         #self.rand_vector = [random.randint(13, 16) for _ in range(self.n_trigger)]
-        self.rand_vector = [random.randint(1,15) for _ in range(self.n_trigger)]
+        self.rand_vector = [random.randint(0,4) for _ in range(self.n_trigger)]
 # Check Arduino buffer overflow - send more than 64 bytes: length of the input= (n numbers+commas)*3 + period (2) + on_time (2) + newline (1) = 3*n + 5 = 64
 # 3*n = 59, n = 19 - maximum length of the vector
-        self.period = 2000 # time between triggers in ms
-        self.on_time = 1000 # presentation time in ms
+        self.period = 1000 # time between triggers in ms
+        self.on_time = 100 # presentation time in ms
 
         # Initialize Arduino connection
         if self.connect_arduino(port, baudrate, timeout):

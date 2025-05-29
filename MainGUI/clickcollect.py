@@ -66,9 +66,9 @@ class ClickCollector(QWidget):
         # Only handle clicks within the left QLabel
         
         core = self.gui.core
-        dmd_name = core.getSLMDevice()
-        slm_width = core.getSLMWidth(dmd_name)
-        slm_height = core.getSLMHeight(dmd_name)
+        dmd_name = core.get_slm_device()
+        slm_width = core.get_slm_width(dmd_name)
+        slm_height = core.get_slm_height(dmd_name)
         
         
         self.gui.affine_transform = self.gui.affine_trans_old
@@ -83,18 +83,18 @@ class ClickCollector(QWidget):
         
         # set the image at the DMD
         #print(transformed_img.shape)
-        core.setSLMImage(dmd_name, transformed_img)
-        core.displaySLMImage(dmd_name)
+        core.set_slm_image(dmd_name, transformed_img)
+        core.display_slm_image(dmd_name)
 
         # take a picture with the camera
-        core.snapImage()
-        tagged_image = core.getTaggedImage()
+        core.snap_image()
+        tagged_image = core.get_tagged_image()
         pixels = np.reshape(tagged_image.pix,
                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
         # turn off the SLM pixels
         time.sleep(0.1)
-        core.setSLMImage(dmd_name, np.zeros((slm_width, slm_height), dtype=np.uint8))
-        core.displaySLMImage(dmd_name)
+        core.set_slm_image(dmd_name, np.zeros((slm_width, slm_height), dtype=np.uint8))
+        core.display_slm_image(dmd_name)
         time.sleep(0.2)
 
         # display the camera image using Display_image.py
@@ -108,10 +108,15 @@ class ClickCollector(QWidget):
     # black image with white pixels where the user clicked
     def mouse_click_image(self, xdata, ydata):
         # build an image with the clicked pixels
-        camera_width = self.gui.core.getImageWidth()
-        camera_height = self.gui.core.getImageHeight()
+        camera_width = self.gui.core.get_image_width()
+        camera_height = self.gui.core.get_image_height()
         new_image = np.zeros((camera_width, camera_height), dtype=np.uint8)
-        new_image[int(xdata)-5:int(xdata)+5, int(ydata)-5:int(ydata)+5] = 255
+
+        # set the size of the clicked area
+        half_point_size = self.gui.light_click_pixels
+        print("half_point_size: ", half_point_size)
+
+        new_image[int(xdata)-half_point_size:int(xdata)+half_point_size, int(ydata)-half_point_size:int(ydata)+half_point_size] = 255
         print("Clicked at: ", xdata, ydata)
         return new_image
 

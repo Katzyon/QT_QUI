@@ -23,14 +23,13 @@ class ProtocolRunner(QThread):
     def __init__(self, gui, parent=None):
         super().__init__(parent)
         self.stop_event = threading.Event() # event to stop the protocol from button press in the main GUI
-        self.stages = gui.prot.stages # dataframe of the protocol
+        self.culture = gui.culture # culture object to save the protocol run data
+        self.protocol = gui.protocol # protocol is a protocolSet object which contains Stage objects in the stages attribute
+        self.stages = self.protocol.stages # list of stages in the protocol
         self.currentStage = 0
-        #self.onTime = 0 # DMD on time in ms for each stimulation
-        #self.period = 0 # image display period in ms
         self.arduino = gui.arduino # arduino object to control the polygon, light source and MaxOne digipins
         
-        print(dir(self.stages))
-        print("number of stages:", len(self.stages)) # the DMAArray is in self.stages[i].DMDArray
+        # print(dir(self.stages))
 
         # get the core to control the DMD
         self.core = gui.core
@@ -40,26 +39,29 @@ class ProtocolRunner(QThread):
         # print the shape of DMDArray
 
         # The number of groups in the protocol - single cells not set into groups are considered as a group (e.g. in 15 cells with 2 groups of 6 cells and 3 single cells, we'll have 5 groups)
-        print("DMDArray num stages:", len(self.stages), "num images", self.stages[0].DMDArray.size()) # "image len", self.DMDArray[0][0].size()
-                # Get the first ArrayList
-        first_array_list = self.stages[0].DMDArray # get the first Java ArrayList
-        first_element = first_array_list.get(0) # get the first Java arraylist element (flatten numpy array)
-        print("image java", type(first_element))
-        print("ravel image java", len(first_element))
+        # "image len", self.DMDArray[0][0].size()
+        #         # Get the first ArrayList
+        # first_array_list = self.stages[0].DMDArray # get the first Java ArrayList
+        # first_element = first_array_list.get(0) # get the first Java arraylist element (flatten numpy array)
+        # print("image java", type(first_element))
+        # print("ravel image java", len(first_element))
  
-        self.dmd_name = self.core.getSLMDevice()
-        self.slm_width = self.core.getSLMWidth(self.dmd_name)
-        self.slm_height = self.core.getSLMHeight(self.dmd_name)
+        self.dmd_name = self.core.get_slm_device()
+        self.slm_width = self.core.get_slm_width(self.dmd_name)
+        self.slm_height = self.core.get_slm_height(self.dmd_name)
         #print("slm width:", self.slm_width, "slm height:", self.slm_height)
+        self.DMDArray = self.bridge._construct_java_object('java.util.ArrayList') # list of DMD images to be displayed in each sequence
         
-        self.black_image = np.zeros((self.core.getSLMHeight(self.dmd_name),
-                             self.core.getSLMWidth(self.dmd_name)), dtype=np.uint8)
+        self.black_image = np.zeros((self.core.get_slm_height(self.dmd_name),
+                             self.core.get_slm_width(self.dmd_name)), dtype=np.uint8)
         #print("black image shape:", self.black_image.shape)
         #self.sleepTime = 500 # time between images in ms - should be a parameter in the protocol...
-        self.Randjavaarray = self.bridge._construct_java_object('java.util.ArrayList')
-        self.randomization_order = [] # list of randomization orders for each stage and repeats
-        self.rand_vector = [] # list of randomized group numbers - up to 19 numbers due to Arduino buffer overflow
-        #self.running = True
+        
+        # not needed anymore as the sequence is randomized in the protocol design
+        # self.Randjavaarray = self.bridge._construct_java_object('java.util.ArrayList')
+        # self.randomization_order = [] # list of randomization orders for each stage and repeats - continuously increasing - need to save and clear it during run?
+        # self.rand_vector = [] # list of randomized group numbers - up to 19 numbers due to Arduino buffer overflow
+        
 
 # if you need to run a distribution of images with different probabilities we need to create:
         # 1. a list of probabilities for each group
@@ -71,72 +73,118 @@ class ProtocolRunner(QThread):
     # Automatically called when running QThread  
     def run(self):
 
-
-        start_time = time.time()
         self.times = 0
 
+        # add one to the protocol index
+        
+        self.culture.protocols_number += 1 # update the number of protocols in the culture object
+        print("protocols number:", self.culture.protocols_number)
+        # add the current protocol to the .protocols list in the culture object
+        
+        
+        
         try:
-            for index, row in enumerate(self.stages):
+            for stage_index, stage in enumerate(self.stages): # iterate over the number of stages in protocol
+
 
                 if self.stop_event.is_set():
                         print("Aborting the run")
                         break
-                #self.images = self.images_[index] # list of DMD images of each cell 
-                #print("images in running prot:", len(self.images))
                 
-                javaSequence = self.stages[index].DMDArray  # self.DMDArray.append(javaarray)list of Java arrayLists, each arrayList is a sequence of (vectorizred) images to be displayed on the DMD
-                print("sequence type:", type(javaSequence), "sequence len:", javaSequence.size())
+                # if index 0 update and save the culture and the protocol ????
+                if stage_index == 0:
+                    ### Update the culture object with the sequence of the stage
+                    # create protocol index folder to save the protocol and stage data
+
+                    #self.culture.save() # save the culture object to the disk - handled in culture_data.py
+                    self.protocol.save_protocol(self.culture.protocols_number)    # save the protocol to the culture folders. handled in culture_data.py
+                    
+
+                sequence = stage.sequence
+                # save the sequence to disk - handled in culture_data.py
+                #start_time = time.time() # get the current time
+                stage.start_run_time = time.time() # time of the start of the stage run
+
+                self.protocol.save_sequence(stage_index, sequence, stage.start_run_time) # save the sequence to the culture object
                 
-                self.times += int(self.stages[index].stimTime)
+                 # get the sequence of the stage
+                arduino_buffer = stage.ard_buffer # number of integers to be sent to the Arduino buffer - to sync with MaxOne
+                #sequence_cuts = round(len(sequence)/arduino_buffer) # number of cuts of the sequence to fit the arduino buffer
+                # print the number of protocol repeats for running the protocol
+                print("protocol repeates", stage.sequence_repeats)
+                
+                    
+                # Update the stage start time and save it.
+                self.protocol.save_start_time(stage_index, stage.start_run_time)
 
-                for seq_repeat in range(self.stages[index].sequenceRepeats): # need to randomize the sequence every sequence repeat
-                    #print("sequence repeat:", seq_repeat + 1, "of", self.stages[index].sequenceRepeats)
-                    if self.stop_event.is_set():
-                            print("Aborting the run")
-                            break
-                    #self.javaSequence = self.randomizeSequence(javaSequence)
-                    #self.core.loadSLMSequence(self.dmd_name, javaSequence) # - test the logic of the javaSequence!!!!
-                    self.randomizeSequence(javaSequence) # randomize the sequence of images
-                    self.core.loadSLMSequence(self.dmd_name, self.Randjavaarray) # load the sequence to the DMD
+                for seq_repeat in range(stage.sequence_repeats): # iterate over the number of repeats of the stage
                     
-                    # wait 10 ms for the DMD to load the sequence - if the sequence is long - need to adjust the time accordingly, How? 
-                    
-                    self.msleep(10)
-                    
-                    #print("image repeats:", self.stages[index].imageRepeats)
-                    # Send sequence information to Arduino (indices, period, on_time)
-                    message = f"{self.rand_vector},{self.stages[index].period},{self.stages[index].onTime}\n"
-                    self.arduino.write(message.encode())
-                    # show error message if the length of self.rand_vector is < 2
-                    if len(self.rand_vector) < 2:
-                        print("Error: The number of groups in the sequence is less than 2- runProtocol L97")
-                        break
 
-                    print(f"Sent to Arduino: Sequence {self.rand_vector} with period {self.stages[index].period} ms and on time {self.stages[index].onTime} ms")
+                    # wait 100ms
+                    #self.msleep(100) # wait for file saving
 
-                    
-                    # Wait for Arduino to confirm it received the message
-                    while not self.stop_event.is_set():
-                        if self.arduino.in_waiting > 0:
-                            response = self.arduino.readline().decode().strip()
-                            print(f"Arduino response: {response}")
-                            if response == "Message received":
-                                #print("Arduino confirmed message received. Starting sequence.")
+
+                    # use the sequence to create DMDArray of arduino_buffer size images (bound the Arduino buffer)
+                    # running over the sequence with chuncks (steps) of arduino_buffer size
+                    for i in range(0, len(sequence), arduino_buffer): # iterate over the length of arduino_buffer in the sequence
+                            current_display_indices = sequence[i:i+arduino_buffer] # get the indices of the groups to be displayed
+                            stage.create_DMDArray(current_display_indices) # create the DMDArray of the images to be displayed on the DMD
+
+                            # print the size of the java array DMDArray
+                            print("DMDArray size:", stage.DMDArray.size())
+
+                            self.core.load_slm_sequence(self.dmd_name, stage.DMDArray) # load the sequence to the DMD
+                            # wait  for the DMD to load the sequence - 4 ms per image!
+                            self.msleep(len(current_display_indices)*4) # wait for the DMD to load the sequence - 4 ms per image
+
+                            if self.stop_event.is_set():
+                                print("Aborting the run")
+                                self.core.stop_slm_sequence(self.dmd_name)
+                                QThread.sleep(0.5)
+                                
+                                # Check if the DMD is responding
+                                try: # check if the DMD is responding
+                                    device_label = self.gui.core.get_property(self.dmd_name, "Label")
+                                    print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")    
+                                    self.core.set_slm_image(self.dmd_name, self.black_image) # display black image
+                                    self.core.display_slm_image(self.dmd_name) # display black image
+                                except Exception as e:
+                                    # If an exception occurs, communication is likely disrupted
+                                    print(f"Communication failed for device '{self.dmd_name}'. Error: {e}")
+                                       
                                 break
 
-                    self.core.startSLMSequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input to display the images
-                    #print("Sequence started - waiting for trigger")
+                            # self.times += int(self.stages[index].stim_time) # validation of run timing - TBA
 
-                    while not self.stop_event.is_set():
-                        if self.arduino.in_waiting > 0:
-                            response = self.arduino.readline().decode().strip()
-                            print(f"Arduino response: {response}")
-                            if response == "Sequence finished":
-                                print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[index].sequenceRepeats} completed by Arduino.")
-                                break
+                            # Use Arduino to trigger the presentation of the images
+                            arduino_display_indices = [x + 1 for x in sequence[i:i+arduino_buffer]] # adds 1 to the groups due to issues with Arduino encoding zeros digipins
+                            message = f"{arduino_display_indices},{self.stages[stage_index].groups_period},{self.stages[stage_index].on_time}\n"
+                            self.arduino.write(message.encode()) # Length of message is limited due to Arduino buffer overflow - ~19 numbers
 
+                                                
+                            while not self.stop_event.is_set(): # Wait for Arduino to confirm it received the message
+                                if self.arduino.in_waiting > 0:
+                                    response = self.arduino.readline().decode().strip()
+                                    #print(f"Arduino response: {response}") # uncheck to validate arduino response
+                                    if response == "Message received":
+                                        #print("Arduino confirmed message received. Starting sequence.")
+                                        break
 
-                    
+                            self.core.start_slm_sequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input to display the images
+                            #print("Sequence started - waiting for trigger")
+
+                            while not self.stop_event.is_set():
+                                if self.arduino.in_waiting > 0:
+                                    response = self.arduino.readline().decode().strip()
+                                    # print(f"Arduino response: {response}") # uncheck to see the presented images indices
+                                    if response == "Sequence finished":
+                                        print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
+                                        break
+
+                    self.core.stop_slm_sequence(self.dmd_name) # stop the sequence  - findout where to put it !!!!!!       
+                    print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[stage_index].sequence_repeats} completed by Arduino.")    
+
+      
                     # no trigger display
                     # # DISPLAY THE IMAGES - iterate over the repeats of the stage
                     # for i in range(self.stages[index].groupsNumber): #prot.stages[0].imageRepeats
@@ -147,31 +195,28 @@ class ProtocolRunner(QThread):
 
                     #     self.core.displaySLMImage(self.dmd_name) # advance to the next image in the sequence
                     #     self.msleep(self.stages[index].interMaskInterval) # sleep between each group (image) presentation in the sequence
-                        
 
-
-                self.core.stopSLMSequence(self.dmd_name)
         except Exception as e:
             print("Error in runProtocol:", e)
 
 
         end_time = time.time()
-        duration = end_time - start_time
+        duration = end_time - stage.start_run_time
         print("Protocol run duration:", duration)
-        print("Protocol theoretical run duration:", self.times*60, "sec")
         
+        
+
         # display black image because there's is a delay in the DMD dispaly between groups
-        self.core.setSLMImage(self.dmd_name, self.black_image)
-        self.core.displaySLMImage(self.dmd_name)
-        # self.msleep(150)
+        # self.core.setSLMImage(self.dmd_name, self.black_image)
+        # self.msleep(5) # upload time is about 4 ms
+        # self.core.displaySLMImage(self.dmd_name)
         #print("black image- Protocol finished")
         #self.protocolFinishSignal.emit()
+        # END OF RUN PROTOCOL
 
     def stop(self):
         print("Trying to abort the protocol")
-        #self.protocolFinishSignal.emit()
-        #self.running = False
-        self.stop_event.set() # 
+        self.stop_event.set() # send the signal to stop the protocol run - stop the qthread of runProtocol.
 
     def randomizeSequence(self, javaSequence):
         # randomize the sequence of images
@@ -186,8 +231,8 @@ class ProtocolRunner(QThread):
         if not hasattr(self, 'randomization_order'):
             self.randomization_order = []
 
-        # Append the randomization order to the class variable
-        self.randomization_order.append(self.rand_vector)
+        # Append the randomization order to the class variable 
+        self.randomization_order.append(self.rand_vector) # is it increasing indefinitely? - need to check
         
         self.Randjavaarray.clear() # clear the java array list
         # Place each image in its new position

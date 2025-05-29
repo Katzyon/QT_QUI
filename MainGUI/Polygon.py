@@ -9,11 +9,11 @@ class Polygon:
         
     def initialize(self):
         # get the SLM device
-        self.dmd_name = self.core.getSLMDevice()
+        self.dmd_name = self.core.get_slm_device()
 
         # set the Polygon properties - TriggerType
         try:
-            self.core.setProperty(self.dmd_name, "TriggerType", "2")
+            self.core.set_property(self.dmd_name, "TriggerType", "2")
             print("Polygon TriggerType set to External.")
         except Exception as e:
             print(f"Error setting TriggerType: {e}")

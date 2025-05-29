@@ -16,13 +16,20 @@
 #                       self.group_image = image with unique integer value for each GROUP
 #                       self.rand_groups = dictionary of random groups of cells (keys are group numbers and values are the unique_cells values in the group)   
 #                       self.group_sums = dictionary of group images (keys are group numbers and values are the group images)
-#                       self.culture.somaMasks = array of DMD images of each cell
+#                       self.culture.soma_masks = array of DMD images of each cell
 #                       self.stages_table = dataframe of the protocol stages
 
+# Arduino loaded with file: MainGUI_Arduino_Trigger @ G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Arduino
+# Connect to COM port 13
+# Arduino pin 3 triggers the light source
+# Arduino pin 4 triggers the MaxOne digipins
+# Arduino pin 5 triggers the DMD
 
 
 import sys
 import os
+from pathlib import Path
+import re
 from datetime import datetime
 import matplotlib.pyplot as plt
 import cv2
@@ -32,14 +39,16 @@ import pandas as pd
 import threading
 import time
 import pickle
+import traceback
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog
 from PySide6.QtCore import Slot
+from PySide6.QtCore import Qt
 #from PySide6.QtGui import QImage, QPixmap, QScreen
 # import QScreen from PySide6.QtGui to get the screen resolution
 
 
-# Important:
+# Important: QT GUI
 # You need to run the following command to generate the ui_form.py file (in Python terminal at the (pattern) environment):
 #     cd("G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI")
 #     pyside6-uic form.ui -o form_ui.py
@@ -60,7 +69,7 @@ from protocol_design import protocol_set # import the protocol_set class from th
 import Camera, MovThread_signal
 import Polygon
 
-
+from protocolSet import ProtocolSet as ps # import the ProtocolSet class from the protocolSet.py file
 import DMDCalibrate as dc  # Calibrate DMD position with camera image
 import clickcollect as cc # click on the image to get the DMD coordinates
 import numpy as np
@@ -70,9 +79,13 @@ import DetectCells_thread as dct # detect cells using cellpose
 from AllSomaQTimer import SomaStimulationWorker
 import GUI_createMasks as gcm
 from culture_data import Culture # import the Culture class
+import RandomGroupCells as rgc# in development folder 
+
 import serial # for serial communication with the Arduino COM13 that triggers the DMD, light source, and MaxOne digipins.
 
-#import CreateMasks
+from runProtocol import ProtocolRunner # run the protocol - create the sequence of images to be displayed on the DMD
+from protocolLoader import ProtocolLoader as pl
+# import CreateMasks
 # import DetectSomas
 
 
@@ -88,6 +101,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.camera = None
         self.polygon = None
         self.monitor = None
+        self.user_dir = r"D:\DATA\Patterns" # directory for the culture data
         self.working_dir = None
         self.image_dir = None
         self.DMD_dir = None
@@ -95,19 +109,23 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.culture_dir = None
         self.culture = None
         self.stages_table = pd.DataFrame()
-        self.manualSequence = []    
+        self.manual_sequence = []    # list of lists of cells to be selected manually
+        self.protocol = None # protocol object may have list of Stages
+        self.mode = "test" # test or run
+        self.soma_masks = [] # list of binary images of each cell
+        self.binary_images = []
+        self.binary_image_all = None
+        self.light_click_pixels = 10 # size of the light click pixels in the mainGUI
+        
+
         self.monitor = get_monitors()[0]
         # Arduino loaded with file: Serial_trig_randvec_light_delay.ino
         self.arduino_port = 'COM13' # Arduino port to trigger the DMD, light source, and MaxOne digipins
         
-        # Create empty protocols table
-        self.stages_table = pd.DataFrame()
-        self.manualSequence = [] # list of lists of cells to be selected manually
-
         self.initialize()
 
     def initialize(self):
-        self.initialize_core()
+        self.initialize_core() # !!! initialize the core and camera !!!
         self.setup_directories()
         self.connect_buttons()
         # connect to Arduino
@@ -119,17 +137,25 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
     def initialize_core(self):
      try:
-         self.core = Core(convert_camel_case=False)
+         self.core = Core(convert_camel_case=True)
          self.camera = Camera.getImage(self.core)
          self.polygon = Polygon.Polygon(self.core)
-         print("Core initialized successfully")
+         #self.stage = self.core.getXYStageDevice() # Java case CamelCase
+         self.stage = self.core.get_xy_stage_device() # python case snake_case
+         devices = [self.core.get_loaded_devices().get(i) for i in range(self.core.get_loaded_devices().size())]
+         print(f"PycroManager connected. Devices: {devices}")
+         self.update_stage_pos()
      except Exception as e:
-         self.show_error_message("Core Error", f"Micro-manager core cannot be initialized - open Micro-manager: {e}")
+         print("Failed to connect to Micro-Manager via PycroManager.")
+         print("This may be due to an open Jupyter session or mismatched ZMQ version.")
+         traceback.print_exc()
+         QMessageBox.critical(self, "Core Error", "Failed to connect to Micro-Manager.\nIs another process (e.g. Jupyter) using Core?\n\nDetails:\n" + str(e))
+         self.core = None
 
         # Access the ImageView placeholder and set data
         #self.imageView = self.ui.imageview # get the widget promoted to imageview object from the ui_form.py file
     def snap_image(self):
-        frame = self.camera.snapImage(self.core)
+        frame = self.camera.snap_image(self.core)
         self.imageview.setImage(frame)
 
     def live_movie(self):
@@ -170,15 +196,17 @@ class MainGui(QMainWindow, Ui_MainGui): #
     def mouse_DMD_shoot(self):
         
         #self.show_error_message("title","error explanation")
+        # get the light_click_pixels_size from the line edit
+        self.light_click_pixels = int(self.light_click_pixels_size.text())
 
         if not hasattr(self, 'affine_transform'):
             self.load_old_affine()
-            self.frame = self.camera.snapImage(self.core) # take background image
+            self.frame = self.camera.snap_image(self.core) # take background image
             self.collector = cc.ClickCollector(self)
             self.collector.show()
             
         else:
-            self.frame = self.camera.snapImage(self.core) # take background image
+            self.frame = self.camera.snap_image(self.core) # take background image
             self.collector = cc.ClickCollector(self)
             self.collector.show()
 
@@ -195,7 +223,14 @@ class MainGui(QMainWindow, Ui_MainGui): #
         return  msg
 
     def load_old_affine(self):
-        reply = QMessageBox.question(self, 'Old affine transform', 'Load old affine transform?', QMessageBox.Yes | QMessageBox.No)
+        box = QMessageBox(self)
+        box.setWindowTitle("Old affine transform")
+        box.setText("Load old affine transform?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        reply = box.exec()
+       
+
         if reply == QMessageBox.Yes:
             # load old affine transformation
             file_path = r"G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI\Images\affine_transform.npy"
@@ -210,8 +245,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
     def binning_set(self):
         # get the binning value from the combo box
-        self.camera.binning = self.binning.currentText()
-        self.core.setProperty(self.core.getCameraDevice(), "Binning", self.camera.binning)
+        self.camera.binning = self.binning.currentText() # 
+        self.core.set_property(self.core.get_camera_device(), "Binning", self.camera.binning)
         print("Binning updated: ", self.camera.binning)
 
     def exposure_set(self):
@@ -220,7 +255,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.exposure = float(self.exposureT.text())
         print("New exposure: ", self.exposure)
 
-        self.core.setExposure(self.exposure)
+        self.core.set_exposure(self.exposure)
 
     def detect_Cells(self):
         # get the number of frames to average from nAverage line edit
@@ -234,7 +269,12 @@ class MainGui(QMainWindow, Ui_MainGui): #
         
         # save the averaged image (self.averageImage) at self.image_dir
         # if user opens the gui twice in the same day - it gives an error because the directory already exists
-        # solve the problem...
+        
+        if self.image_dir is None:
+            print("You already have a culture for today. Delete the folder and run again")
+            # exit the function
+            return
+
         print("Saving image to: ", self.image_dir)
         self.camera.saveImage(self.averageImage, self.image_dir)
 
@@ -281,9 +321,9 @@ class MainGui(QMainWindow, Ui_MainGui): #
         
 
         #print("cellPoseResult: ", type(self.masks))
-        self.binary_image = (masks > 0).astype(np.uint8) # binary mask of all cells 0/1
+        self.binary_image_all = (masks > 0).astype(np.uint8) # binary mask of all cells 0/1
         # print to screen min max of all binary_image
-        print("binary_image min:", self.binary_image.min(), "binary_image max:", self.binary_image.max())
+        print("binary_image min:", self.binary_image_all.min(), "binary_image max:", self.binary_image_all.max())
         
         # save the binary image of detected cells
         tifffile.imwrite(self.image_dir + "/mask_output.tif", self.masks)
@@ -299,7 +339,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             self.read_mask_image = tifffile.imread(self.image_dir + "/mask_output.tif")
             # get the number unique cells from the binary image
             self.unique_cells = np.unique(self.read_mask_image)
-            print("read unique cells:", (self.unique_cells))
+            #print("read unique cells:", (self.unique_cells))
 
 
         plt.figure(figsize=(12, 4))
@@ -315,7 +355,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         plt.title("Segmentation Masks-DetectCells_thread.py")
 
         plt.subplot(1, 4, 3)
-        plt.imshow(self.binary_image, cmap='gray')
+        plt.imshow(self.binary_image_all, cmap='gray')
         plt.title("Binary  Masks")
 
         plt.subplot(1, 4, 4)
@@ -335,32 +375,36 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.save_masks()
 
 # saving binary images of each cell
-    def save_masks(self):
+    def save_masks(self): # called by cellPoseResult function
         # create a mask image for each cell and save it in the image_dir as BMP in the DMD folder
         
         
         if not hasattr(self, 'affine_transform'):
             self.load_old_affine()
 
-        gcm.make_masks(self)
+        gcm.make_masks(self) # gcm is the GUI_createMasks.py file
+        print("save_masks: ", len(self.binary_images), " masks")
 
+        
         try:
-            self.culture.somaMasks = gcm.affine_transform(self, self.binary_images, self.DMD_dir) # self.binary_images= array of binary images of each cell
+            gcm.affine_transform(self, self.binary_images, self.DMD_dir) # gcm is the GUI_createMasks.py file
+            # self.soma_masks= array of binary images of each cell
+            # The .affine_transform method saves the DMD images in the DMD folder
+
         except:
             print("You are probably testing. Try deleting todays culture file ", self.culture_dir,  "and run again")
 
-        self.culture.cellsNumber = len(self.culture.somaMasks)
+        self.culture.cellsNumber = len(self.soma_masks)
         # self.transform_images # used in runProtocol.py ProtocolRunner
-        self.culture.save()
-        print("transform_images length:", len(self.culture.somaMasks), " images")
+        self.culture.save() # save the culture object with the new number of cells
+        
+        #print("transform_images length:", len(self.soma_masks), " images")
 
 
 
     def save_group_masks(self):
         # create a mask image for each group and save it in the image_dir as BMP in the DMD folder
 
-        import RandomGroupCells as rgc# in development folder 
-        
 
         # get the group size from the line edit
         self.rand_group_size = int(self.group_size.text())
@@ -405,7 +449,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         for group in groups:
             self.manualGroups.append(group['cells'])
         print("manualGroups:", self.manualGroups)
-        # create self.manualSequence which includes the list of the manualGroups and the remaining_cells.
+        # create self.manual_sequence which includes the list of the manualGroups and the remaining_cells.
         # the remaining_cells are the cells that were not selected manually
         print("type of self.unique_cells:", type(self.unique_cells))
         remaining_cells = self.unique_cells.tolist() # convert numpy array to list
@@ -414,14 +458,11 @@ class MainGui(QMainWindow, Ui_MainGui): #
                 remaining_cells.remove(cell)
         
         self.remainingManualCells = [[item] for item in remaining_cells] # list the remaining cells separately as groups of 1 cell each
-        self.manualSequence = self.manualGroups + self.remainingManualCells
-        print("manualSequence:", self.manualSequence)
+        self.manual_sequence = self.manualGroups + self.remainingManualCells
+        print("manual_sequence:", self.manual_sequence)
         # update isManual
         
 
-        
-        # save the groups dictionary in the image_dir
-        #np.save(self.image_dir + "/groups.npy", self.groups)
 
 
     def on_finished_processing(self):
@@ -474,43 +515,50 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         
         # Opens the protocol window
-        self.protocol_window = protocol_set(self.stages_table, self.culture.cellsNumber)
-        # wait until the protocol window is closed
-        self.protocol_window.exec()
+        self.protocol_window = protocol_set(self.culture) # self.culture.cellsNumber
+
+        # Connect the `finished` signal to a callback to handle post-dialog actions
+        self.protocol_window.finished.connect(self.on_protocol_window_closed)
+        
+        # Show the protocol window non-modally
+        self.protocol_window.show()
+
+
+    def on_protocol_window_closed(self):
+        """Callback for when the protocol window is closed"""
+        # Get the updated stages_table from the protocol window
         self.stages_table = self.protocol_window.stages_table
-        # get the stages_table from the protocol window
-       
-        print("MainGUI: ", self.stages_table)
+        # look for the output_group column in the stages_table ? 
+        print("MainGUI: stages ", self.stages_table)
 
 
 
     def load_protocol(self):
-        from protocolLoader import ProtocolLoader as pl
+        # load the protocol from a file
         
         file_loader_dialog = pl(self)
         file_loader_dialog.signalOutData.connect(self.handleLoadedData) # signalOutData = Signal(object) # signal to send the dataframe to the main window
         file_loader_dialog.exec() # 
 
-    # handle the dataframe returned from the file_loader_dialog (in load_protocol function)
+    # handles the dataframe returned from the file_loader_dialog (in load_protocol function)
     def handleLoadedData(self, data):
-        import protocolSet as ps
+        # Set all the parameters for running the protocol 
+
         #print("handleLoadedData: ", data)
         self.stages_table = data # data is the protocol csv file as a dataframe returned from the file_loader_dialog
-        self.prot = ps.ProtocolSet(self) # create the Protocol setting object
-        self.prot.extract_protocol() # 
-        print("self.prot.stages.numberCells: ", self.prot.stages[0].numberCells)
-        print("self.prot.stages.repeats: ", self.prot.stages[0].sequenceRepeats)
-        self.prot.create_stimulation_sequence() # in ps.ProtocolSet
+        self.protocol = ps(self) # create the Protocol setting object by protocolSet.py file
+        self.protocol.extract_protocol() # 
+        print("self.protocol.stages.numberCells: ", self.protocol.stages[0].number_cells)
+        print("self.protocol.stages.repeats: ", self.protocol.stages[0].sequence_repeats)
 
         # print the size of sequences_images in prot object
-        for i in range(len(self.prot.sequences_images)):
-            print("self.prot.stages.sequences_images ", i, " length: ", len(self.prot.sequences_images[i]))
+        # for i in range(len(self.protocol.stages[0].sequences_images)):
+        #     print("self.protocol.stages.sequences_images ", i, " length: ", len(self.protocol.sequences_images[i]))
 
     
 
     def run_protocol(self):
-        from runProtocol import ProtocolRunner
-
+        """ Following button press run the protocol """
         
         
         self.stopProtocol.setVisible(True) # make the stopProtocol button visible
@@ -522,7 +570,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("Protocol set")
             print(self.stages_table)
 
-            #print("DMDArray size", len(self.prot.stages[0].DMDArray))
+            #print("DMDArray size", len(self.protocol.stages[0].DMDArray))
             # run the protocol
             self.protocol_runner = ProtocolRunner(self)
             self.protocol_runner.start() # run the protocol
@@ -532,63 +580,163 @@ class MainGui(QMainWindow, Ui_MainGui): #
     def cleanupProtocolRunner(self):
         
         self.protocol_runner.deleteLater()
-        # wait for two seconds
-        time.sleep(2)
+        
 
         print("Protocol runner deleted")
         self.stopProtocol.setVisible(False)
+        # !!! save and update the culture object with the new protocol
         
 
     def stop_protocol(self):
         self.protocol_runner.stop()
+        # wait to the protocol_runner to finish
+        self.protocol_runner.wait() # wait for the thread to finish
+        self.cleanupProtocolRunner()
         
-    def load_test_culture(self): # the culture is saved in the culture_dir created in the init function and updated in save_masks function
+    def load_test_culture(self): 
+        # the culture is saved in the culture_dir created in the init function and updated in save_masks function
         # load the test culture from the pickle file in D:\DATA\Patterns\Patt_2023-11-28\Culture
         # create the file name
         fileName = "2023-12-19" + ".pkl"
         # load the object
         with open(os.path.join(r'D:\DATA\Patterns\Test_DO_NOT_DELETE\Culture', fileName), 'rb') as input:
             self.culture = pickle.load(input)
+            
         print("Culture with", self.culture.cellsNumber , "cells loaded")
+        
+        self.working_dir = r"D:\DATA\Patterns\Test_DO_NOT_DELETE"
+        self.image_dir =  self.working_dir + "\\Images"
+        self.DMD_dir = self.working_dir + "\\DMD"
+        self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
+        self.culture_dir = self.working_dir + "\\Culture"
+        print("Updated all exp directories: ", self.image_dir)
+        self.read_mask_image = tifffile.imread(self.image_dir + "/mask_output.tif")
+        self.unique_cells = np.unique(self.read_mask_image)
+       
+
+    def load_culture(self):
+    
+
+        # load the culture object from the Culture directory
+        print("Loading culture object from: ", self.culture_dir)
+        culture_path = Path(self.culture_dir)
+        pkl_files = sorted(culture_path.glob('*.pkl'), key=os.path.getmtime, reverse=True) 
+        if pkl_files:
+            try:
+                with open(pkl_files[0], 'rb') as f: # load the last created culture object
+                    self.culture = pickle.load(f)
+                    print(vars(self.culture))
+                    print("cellsNumber: ", self.culture.cellsNumber)    
+                    print(f"Culture object loaded from {pkl_files[0]}")
+                    if not isinstance(self.culture, Culture):
+                        self.show_error_message("Culture load", "No Culture object loaded.")
+                        return
+            except Exception as e:
+                print(f"Error loading culture: {e}")
+        
+        # load the soma masks from the DMD directory
+        self.soma_masks = []
+        DMD_files = os.listdir(self.DMD_dir)
+        sorted_file_names = sorted(DMD_files, key=lambda x: int(x.split(".")[0]))
+        # create the DMD_images array
+        for filen in sorted_file_names:
+            if filen.endswith(".bmp"):
+                # read the image and append
+                image = cv2.imread(os.path.join(self.DMD_dir, filen), cv2.IMREAD_GRAYSCALE)
+                self.soma_masks.append(image)
+                # print the size the DMD_images array
+        print(f"cell_number: {len(self.soma_masks)}, image size: {image.shape}")
+
+        protocols_dir = os.path.join(self.culture_dir, "Protocols")
+        pattern = re.compile(r'^Protocol_(\d+)$') # matches "Protocol_1", "Protocol_2", etc.
+        # Get all existing protocol indices
+        existing_indices = []
+        for name in os.listdir(protocols_dir):
+            match = pattern.match(name)
+            if match:
+                existing_indices.append(int(match.group(1)))
+
+        next_index = max(existing_indices, default=0) + 1
+        new_folder_name = f"Protocol_{next_index}"
+        new_folder_path = os.path.join(protocols_dir, new_folder_name)
+        os.makedirs(new_folder_path)
+        self.culture.current_protocol_dir = new_folder_path
+
+        print(f"Created new protocol directory: {new_folder_path}")
+
+
 
 
     def setup_directories(self):
-        # create new working directory for the current session at D:\DATA. The directory name starts with Patterns followed by the current date
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        self.working_dir = r"D:\DATA\Patterns" + "\\Patt_" + current_date
-        print("Working dir: ", self.working_dir)
+
+        ask = QMessageBox.question(
+            self, 'Load existing culture',
+            'Do you want to load existing culture?',
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if ask == QMessageBox.Yes:
+            selected_dir = QFileDialog.getExistingDirectory(self, "Select Directory", self.user_dir)
+            if selected_dir:
+                self.working_dir = os.path.normpath(selected_dir)
+                print("Selected directory:", self.working_dir)
+                self._define_subdirectories()
+                self.load_culture() # load the culture object from the Culture directory
+            else:
+                print("No directory selected - try again") 
+                #self._create_new_directories()
+                
+        else:
+            self._create_new_directories()
 
 
-        # create the working directory if it doesn't exist
-        if not os.path.exists(self.working_dir): 
+    def _define_subdirectories(self):
+        base = self.working_dir
+        self.image_dir = os.path.join(base, "Images")
+        self.DMD_dir = os.path.join(base, "DMD")
+        self.DMD_group_masks = os.path.join(base, "DMD_Groups")
+        self.culture_dir = os.path.join(base, "Culture")
+        self.protocols_directory = os.path.join(self.culture_dir, "Protocols")   
+
+       
+
             
-        
-        # create the directories for the experimental files
-            self.image_dir =  self.working_dir + "\\Images"
-            print("Image dir: ", self.image_dir)
-            self.DMD_dir = self.working_dir + "\\DMD"
-            self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
-            self.culture_dir = self.working_dir + "\\Culture"
-            
-            os.makedirs(self.working_dir)
-            os.makedirs(self.image_dir)
-            os.makedirs(self.DMD_dir)
-            os.makedirs(self.DMD_group_masks)
-            os.makedirs(self.culture_dir)
+    def _create_new_directories(self):
+        chip_number, ok = QInputDialog.getText(self, 'Chip Number', 'Enter the MaxOne chip number:')
+        if not (ok and chip_number):
+            print("Chip number input cancelled.")
+            return
 
-  
-            # initialize culture list variable and save it in the culture directory
-            self.culture = Culture(current_date, self.culture_dir) # in the future might have couple of cultures in the same day
-            self.culture.date = current_date
-            self.culture.save()
-            # notify the user that the directories are created
-            print(f"Directories created:\n{self.working_dir}\n{self.image_dir}\n{self.DMD_dir}\n{self.DMD_group_masks}\n{self.culture_dir}")
+        self.working_dir = os.path.join(self.user_dir, chip_number)
 
+        if os.path.exists(self.working_dir):
+            self.show_error_message("Directory exists", "The directory already exists. Please select a different directory.")
+            print("Directory already exists. Please select a different directory.")
+            return
 
-        # else: # to be deleted in the future - just for testing when starting the same session many times
-        #     self.image_dir = self.working_dir + "\\Images" 
-        #     self.DMD_dir = self.working_dir + "\\DMD"
-        #     self.DMD_group_masks = self.working_dir + "\\DMD_Groups"
+        self._define_subdirectories()
+
+        for path in [
+            self.working_dir,
+            self.image_dir,
+            self.DMD_dir,
+            self.DMD_group_masks,
+            self.culture_dir,
+            self.protocols_directory
+        ]:
+            os.makedirs(path, exist_ok=False)
+
+        self.culture = Culture(self.working_dir)  # the object is created by culture_data.py file
+        # Future support for multiple cultures per day
+        print("Directories created:")
+        print("\n".join([
+            self.working_dir,
+            self.image_dir,
+            self.DMD_dir,
+            self.DMD_group_masks,
+            self.culture_dir
+        ]))
+
 
 
     def connect_buttons(self):
@@ -609,6 +757,10 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.runProtocol.clicked.connect(self.run_protocol) # connect runProtocol button to run protocol
         self.stopProtocol.clicked.connect(self.stop_protocol) # connect stopProtocol button to stop protocol
         self.loadTest.clicked.connect(self.load_test_culture) # connect loadTest button to load test culture
+        self.testGroup.clicked.connect(self.test_group_select) # connect testGroup button to test_group_select function
+        self.update_stage.clicked.connect(self.update_stage_pos) # connect update_stage button to update_stage function
+        self.zero_stage.clicked.connect(self.zero_stage_pos) # connect zero_stage button to zero_stage function
+        self.move_stage.clicked.connect(self.move_stage_pos) # connect move_stage button to move_stage function
 
     def connect_arduino(self, port='COM13', baudrate=19200, timeout=2):
 
@@ -621,6 +773,47 @@ class MainGui(QMainWindow, Ui_MainGui): #
             return False
         return True
 
+    def test_group_select(self): # Output_group
+        # Let the user select the TEST (output layer) group of cells that will not be patterned stimulated.
+        # The user will click on the cells to be selected and then press the group button
+        # The selected cells will be saved in the self.testGroupCells variable
+        pass
+
+    def update_stage_pos(self):
+        # Update the stage position in the GUI following manual movement and button press
+        try:
+            x = self.core.get_x_position(self.stage)
+            y = self.core.get_y_position(self.stage)
+            # Update the stage position labels in the GUI
+            self.stage_position.setText(f"{x:.2f},{y:.2f}")
+            
+            print(f"Stage position updated: X={x}, Y={y}")
+        except Exception as e:
+            print(f"Error updating stage position: {e}")
+        
+    def zero_stage_pos(self):
+        # set the current poisition as zero position
+        try:
+            self.core.set_adapter_origin_xy(self.stage, 0.0, 0.0)
+            print("Stage position set to zero.")
+            self.update_stage_pos()  # Update the GUI after zeroing
+        except Exception as e:
+            print(f"Error zeroing stage position: {e}")
+
+    def move_stage_pos(self):
+    # read position from text field and Move the stage to a specified position
+        try:
+            x = int(self.xpos.text())
+            y = int(self.ypos.text())
+            self.core.set_xy_position(self.stage, x, y)
+            self.core.wait_for_device(self.stage)  # Wait for the stage to finish moving
+            print(f"Stage moved to position: X={x}, Y={y}")
+            self.update_stage_pos()  # Update the GUI after moving
+        except Exception as e:
+            print(f"Error moving stage: {e}")
+            self.show_error_message("Stage Movement Error", f"Could not move stage: {e}", QMessageBox.Critical)
+       
+        
 
 
 if __name__ == "__main__":

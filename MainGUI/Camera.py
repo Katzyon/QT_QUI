@@ -12,31 +12,20 @@ class getImage:  # called by init_window.py
     def __init__(self, core):
         super().__init__() # inherit from the parent class
     
-        #self.core = core() # 
-        #core.set_exposure(30)
-        self.name = core.getCameraDevice()
-        self.exposure = core.getExposure()
-        trigmode = core.getProperty(self.name, "TriggerMode")
+
+        self.name = core.get_camera_device()
+        self.exposure = core.get_exposure()
+        trigmode = core.get_property(self.name, "TriggerMode")
         print(self.name, "Trigger mode: ", trigmode)
-        fanspeed = core.getProperty(self.name, "FanSpeedSetpoint") # High, Medium, Low, Off(Lquid Coolded)
+        fanspeed = core.get_property(self.name, "FanSpeedSetpoint")  # High, Medium, Low, Off (Liquid Cooled)
         print(self.name, "Fan speed: ", fanspeed)
-        core.setProperty(self.name, "FanSpeedSetpoint", "Low")
-        CCDTemp = core.getProperty(self.name, "CCDTemperature")
-        print(self.name, "CCD Temperature: ", CCDTemp)
-        self.binning = core.getProperty(self.name, "Binning")
-        core.setProperty(self.name, "Binning", "2x2")
+        core.set_property(self.name, "FanSpeedSetpoint", "Low")
+        ccd_temp = core.get_property(self.name, "CCDTemperature")
+        print(self.name, "CCD Temperature: ", ccd_temp)
+        self.binning = core.get_property(self.name, "Binning")
+        core.set_property(self.name, "Binning", "2x2")
         print(self.name, "Binning: ", self.binning)
-        # set exposure n ms
-        core.setProperty(self.name, "Exposure", 2)
-
-        #self.name = "Camera-1"
-
-
-
-        #self.core.initialize() # this line is needed if running in a script
-        #print("initialized core")
-        # init the devices
-        #init_devices(core)
+        core.set_property(self.name, "Exposure", 2)
 
 
 
@@ -56,11 +45,11 @@ class getImage:  # called by init_window.py
         #init_devices(core)
 
 
-    def snapImage(self,core):  # called by 
+    def snap_image(self,core):  # called by 
             #core = Core() # !!! create the core in the main GUI not here !!! just pass the core to this function
-            core.snapImage()
+            core.snap_image()
             #self.core.snap_image()
-            tagged_image = core.getTaggedImage() # tagged_image is a numpy array on 1D.
+            tagged_image = core.get_tagged_image() # tagged_image is a numpy array on 1D.
             # reshape the 1D array to 2D array
             pixels = np.reshape(tagged_image.pix,
                                 newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']]) # reshape the 1D array to 2D array
@@ -116,7 +105,7 @@ class getImage:  # called by init_window.py
     def averageImages(self, core, num_images):
         # running average num_images images and return the average image
         for i in range(num_images):
-            frame = self.snapImage(core)
+            frame = self.snap_image(core)
             if i == 0:
                 sum_frame = frame
             else:

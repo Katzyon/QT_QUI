@@ -21,7 +21,7 @@ class MovieThread(QThread):
         #print("MovieThread run")
         
         while self.is_running:
-            frame = self.MainGUI.camera.snapImage(self.MainGUI.core)
+            frame = self.MainGUI.camera.snap_image(self.MainGUI.core)
             self.frame_ready.emit(frame)  # Emit the signal with the new frame
             self.msleep(100)  # Sleep for 100 ms (equivalent to 0.1 seconds)
 

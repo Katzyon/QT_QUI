@@ -164,9 +164,13 @@
     </item>
     <item row="0" column="9">
      <widget class="QLabel" name="groupsNumbers">
+      <property name="toolTip">
+       <string>When &quot;Squares&quot; type, number of simultanous presented squares</string>
+      </property>
       <property name="text">
        <string>Number of 
- groups</string>
+ groups 
+ or squares</string>
       </property>
      </widget>
     </item>
@@ -179,6 +183,9 @@
     </item>
     <item row="2" column="1">
      <widget class="QComboBox" name="stim_type">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
       <property name="frame">
        <bool>true</bool>
       </property>
@@ -205,6 +212,11 @@
       <item>
        <property name="text">
         <string extracomment="Stimulating randomly all neurons in culture">Spontaneous</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Squares</string>
        </property>
       </item>
      </widget>
@@ -317,7 +329,8 @@
     <item row="0" column="8">
      <widget class="QLabel" name="label_7">
       <property name="text">
-       <string>Group size</string>
+       <string>Group size 
+ Square size</string>
       </property>
      </widget>
     </item>

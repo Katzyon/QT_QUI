@@ -24,7 +24,7 @@ class ProtocolSet():
             self.stages_table = gui.stages_table # dataframe of the protocol
             self.manual_sequence = gui.manual_sequence # list of manually selected groups
             self.images = gui.soma_masks # list of images of the cells somata
-            self.bridge = gui.core._get_bridge() # get the Java bridge to create Java SLM sequence
+            #self.bridge = gui.core._get_bridge() # get the Java bridge to create Java SLM sequence (JavaObject)
             #self.sequences = [] # list of lists of the sequence of image INDICES to be displayed on the DMD
             self.stages = []   # list of the stages in the protocol - each stage is a Protocol object. 
             self.n_rows = 0 # number of stages in the protocol
@@ -35,16 +35,17 @@ class ProtocolSet():
             
             print("init protocol set", self.current_protocol_dir)
 
-        def __getstate__(self): # exclude the bridge attribute from pickling
-            state = self.__dict__.copy()
-            # Remove the bridge attribute before pickling
-            if 'bridge' in state:
-                del state['bridge']
-            if 'images' in state:
-                del state['images']
-            # Handle nested Stage objects
-            #state['stages'] = [stage.__getstate__() for stage in self.stages]
-            return state
+        # def __getstate__(self): # called when pickling the ProtocolSet object by the pickle module
+        #     # exclude the bridge attribute from pickling
+        #     state = self.__dict__.copy()
+        #     # Remove the bridge attribute before pickling
+        #     if 'bridge' in state:
+        #         del state['bridge']
+        #     if 'images' in state:
+        #         del state['images']
+        #     # Handle nested Stage objects
+        #     #state['stages'] = [stage.__getstate__() for stage in self.stages]
+        #     return state
               
 
         def extract_protocol(self): # called from maingui.py following the "Load Protocol" button
@@ -68,7 +69,7 @@ class ProtocolSet():
             
         def _create_stage_from_row(self, row, index):
             """Helper function to create and configure a Stage object from a DataFrame row."""
-            stage = Stage(self.bridge, self.images) # call the Stage from Protocol.py
+            stage = Stage(self.images) # call the Stage from Protocol.py
             stage.number = index + 1
 
             # Set attributes from the row

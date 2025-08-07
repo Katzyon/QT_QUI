@@ -42,7 +42,7 @@ def make_masks(self):
     # plot the image using matplotlib
     plt.figure(figsize=(12, 4))
     plt.get_current_fig_manager().set_window_title("GUI_createMasks_make_masks")
-    plt.imshow(self.masks, cmap='gray')
+    plt.imshow(cv2.transpose(self.masks), cmap='gray')
     plt.title("Masks Images Gray scaled somas index")
     plt.show()
     # sleep
@@ -50,14 +50,13 @@ def make_masks(self):
 
 
 def affine_transform(self, images, save_dir):
-    # apply affine transformation to the binary images and save them to DMD folder
-       
-    
+    # apply affine transformation to the binary images so they will match the DMD dimensions and save them to DMD folder
+
     #print("affine_tranform:", self.affine_transform)
 
     # debug the exception of the affine_transform
     print(len(images), " GUI_createMasks_affine_transform")
-    print(images[0].shape)
+    #print(images[0].shape)
     #print("saving at ", save_dir)
 
 

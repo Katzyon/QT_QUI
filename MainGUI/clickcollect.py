@@ -8,7 +8,7 @@ import time
 import Display_image as di
 
 # ImageLabel class is used to display the user clicks on the image and produce corresponding DMD images
-class ImageLabel(QLabel):
+class ImageLabel(QLabel): # called by ClickCollector
     """A QLabel that can display a the user click on the image
     It produces corresponding image to light stimulate the selected point ."""
     
@@ -35,6 +35,7 @@ class ClickCollector(QWidget):
         super().__init__()
 
         self.gui = gui
+        self.arduino = gui.arduino
         # get the camera image and convert it to QImage
         base_image = self.camImage_to_QImage(gui.frame)
         self.current_point = (0,0)
@@ -59,7 +60,7 @@ class ClickCollector(QWidget):
         
     def init_ui(self):
         self.setWindowTitle('Click Collector')
-        self.move(50, 50)
+        self.move(50, 50) # move the window to the top left corner
         
         
     def mousePressEvent(self, event):
@@ -84,6 +85,8 @@ class ClickCollector(QWidget):
         # set the image at the DMD
         #print(transformed_img.shape)
         core.set_slm_image(dmd_name, transformed_img)
+        # add a small delay to ensure the SLM image is set before displaying it
+        time.sleep(0.01)
         core.display_slm_image(dmd_name)
 
         # take a picture with the camera
@@ -91,11 +94,14 @@ class ClickCollector(QWidget):
         tagged_image = core.get_tagged_image()
         pixels = np.reshape(tagged_image.pix,
                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
-        # turn off the SLM pixels
+        
         time.sleep(0.1)
+
+        
+        # turn off the SLM pixels - Not necessary, but it is a good practice to clear the SLM after each click
         core.set_slm_image(dmd_name, np.zeros((slm_width, slm_height), dtype=np.uint8))
         core.display_slm_image(dmd_name)
-        time.sleep(0.2)
+        time.sleep(0.1)
 
         # display the camera image using Display_image.py
         di.display_image(pixels,"cam_image") # display the image in a new window the second argument is the figure identifier

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<config>
+    <source_groups>
+        <source_group_fd9a6597-4162-43dd-b612-7d1b66b7f84a>
+            <name>Python Source Group</name>
+            <python_environment_path>C:/Users/Pattern/.conda/envs/pattern</python_environment_path>
+            <source_extensions>
+                <source_extension>.py</source_extension>
+            </source_extensions>
+            <source_paths>
+                <source_path>MainGUI</source_path>
+            </source_paths>
+            <status>enabled</status>
+            <type>Python Source Group</type>
+        </source_group_fd9a6597-4162-43dd-b612-7d1b66b7f84a>
+    </source_groups>
+    <version>8</version>
+</config>

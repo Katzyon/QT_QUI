@@ -82,6 +82,7 @@ from culture_data import Culture # import the Culture class
 import RandomGroupCells as rgc# in development folder 
 
 import serial # for serial communication with the Arduino COM13 that triggers the DMD, light source, and MaxOne digipins.
+from arduino_comm import ArduinoComm
 
 from runProtocol import ProtocolRunner # run the protocol - create the sequence of images to be displayed on the DMD
 from protocolLoader import ProtocolLoader as pl
@@ -94,6 +95,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         super(MainGui, self).__init__()
         
         self.setupUi(self) # setup the GUI from Ui_MainGui via the ui_form.py file
+        self.imageview.ui.histogram.show() # show the histogram in the imageview widget
         self.stopProtocol.setVisible(False) # or True
 
         # Initialize core attributes
@@ -104,7 +106,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.user_dir = r"D:\DATA\Patterns" # directory for the culture data
         self.working_dir = None
         self.image_dir = None
-        self.DMD_dir = None
+        self.DMD_dir = None # DMD pixel size (912, 1140)
         self.DMD_group_masks = None
         self.culture_dir = None
         self.culture = None
@@ -116,7 +118,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.binary_images = []
         self.binary_image_all = None
         self.light_click_pixels = 10 # size of the light click pixels in the mainGUI
-        
+        self.img_rotated = None # image with detected cells rotated
+        self.rotated_averageImage = None # average image rotated
 
         self.monitor = get_monitors()[0]
         # Arduino loaded with file: Serial_trig_randvec_light_delay.ino
@@ -129,8 +132,10 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.setup_directories()
         self.connect_buttons()
         # connect to Arduino
-        self.connect_arduino(port=self.arduino_port, baudrate=19200, timeout=2)
-
+        #self.connect_arduino(port=self.arduino_port, baudrate=19200, timeout=2)
+        self.arduino_comm = ArduinoComm.connect(port='COM13', baudrate=19200, timeout=2)
+        self.arduino = self.arduino_comm.arduino # get the serial object from the ArduinoComm class
+        
         # Load the affine transformation matrix from the last saved calibration
         self.load_old_affine()
 
@@ -156,7 +161,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         #self.imageView = self.ui.imageview # get the widget promoted to imageview object from the ui_form.py file
     def snap_image(self):
         frame = self.camera.snap_image(self.core)
-        self.imageview.setImage(frame)
+        self.imageview.setImage(frame) # self.imageview is the ImageView widget from the ui_form.py file
 
     def live_movie(self):
         # create MovieThread object if it doesn't exist
@@ -207,7 +212,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             
         else:
             self.frame = self.camera.snap_image(self.core) # take background image
-            self.collector = cc.ClickCollector(self)
+            self.collector = cc.ClickCollector(self) # cc is the ClickCollector class from clickcollect.py file
             self.collector.show()
 
     def show_error_message(self, title, message, icon_type=QMessageBox.Critical):
@@ -278,19 +283,26 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print("Saving image to: ", self.image_dir)
         self.camera.saveImage(self.averageImage, self.image_dir)
 
+        
         # Detecting cell bodies
         # get the min and max particle area from the line edits
         self.min_area = int(self.minsize.text())
         self.max_area = int(self.maxsize.text())
         self.cellDiameter = int(self.cellpose_diameter.text()) # cellpose_diameter
 
-        detected_cells = DetectCell.detect_particles(self.averageImage, self.min_area, self.max_area)
-        img_rotated = cv2.transpose(detected_cells)
-        #img_rotated = cv2.flip(img_rotated, flipCode=0)  # flip vertically
-        plt.imshow(img_rotated, cmap='gray')
-        plt.title("Detected Neuronal Somas")
+
+        self.rotated_averageImage = cv2.transpose(self.averageImage)
+        detected_cells = DetectCell.detect_particles(self.rotated_averageImage, self.min_area, self.max_area)
+        self.img_rotated = detected_cells
         
-        fig_height, fig_width = img_rotated.shape[:2]
+        # detected_cells = DetectCell.detect_particles(self.averageImage, self.min_area, self.max_area)
+        # self.img_rotated = cv2.transpose(detected_cells)
+        
+
+        plt.imshow(self.img_rotated, cmap='gray')
+        plt.title("Detected Neuronal Somas")
+
+        fig_height, fig_width = self.img_rotated.shape[:2]
         x = 100
         y = 100
         manager = plt.get_current_fig_manager()
@@ -304,13 +316,20 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print("Starting Cellpose processing, WAIT...")
         self.detectMsg = self.show_error_message("Soma detection","Cellpose processing, CLOSE THIS NOTIFICATION TO PROCEED", QMessageBox.Information)
 
+        # print the size of the averageImage
+        print("Average image before cellpose: ", self.averageImage[0, :3])
+
 
         # Soma detection using Cellpose
-        self.cellpose_worker = dct.CellposeWorker(self.averageImage, self.cellDiameter) # cells image and diameter
+        #self.cellpose_worker = dct.CellposeWorker(self.rotated_averageImage, self.cellDiameter) # cells image and diameter
+        
+        self.cellpose_worker = dct.CellposeWorker(self.averageImage, self.cellDiameter) #  dct is  DetectCells_thread   cells image and diameter
         self.cellpose_worker.updatePlot.connect(self.cellPoseResult) # plot model output in main GUI thread - Cellpose
         self.cellpose_worker.finishedProcessing.connect(self.on_finished_processing)
         self.cell_mask = self.cellpose_worker.start()
         # when finished, the worker emits the finishedProcessing signal which is connected to the on_finished_processing function
+        # print the size of the averageImage
+        print("Average image following CellPose: ", self.averageImage[0, :3])
 
 
     # cellpose model results plotting     -  TAKE OUT OF MAIN GUI AND NEST IN CELLPOSE WORKER
@@ -347,19 +366,20 @@ class MainGui(QMainWindow, Ui_MainGui): #
         plt.suptitle("Soma Detection Results", fontsize=16)
 
         plt.subplot(1, 4, 1)
-        plt.imshow(img_array, cmap='gray')
+        
+        plt.imshow(cv2.transpose(img_array), cmap='gray')
         plt.title("Original Image")
 
         plt.subplot(1, 4, 2)
-        plt.imshow(self.masks, cmap='tab20b')
+        plt.imshow(cv2.transpose(self.masks), cmap='tab20b')
         plt.title("Segmentation Masks-DetectCells_thread.py")
 
         plt.subplot(1, 4, 3)
-        plt.imshow(self.binary_image_all, cmap='gray')
+        plt.imshow(cv2.transpose(self.binary_image_all), cmap='gray')
         plt.title("Binary  Masks")
 
         plt.subplot(1, 4, 4)
-        plt.imshow(flow_magnitude, cmap='viridis')
+        plt.imshow(cv2.transpose(flow_magnitude), cmap='viridis')
         plt.title("Flow Magnitude-cellPoseResult in MainGUI")
 
         plt.tight_layout()
@@ -383,7 +403,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             self.load_old_affine()
 
         gcm.make_masks(self) # gcm is the GUI_createMasks.py file
-        print("save_masks: ", len(self.binary_images), " masks")
+        #print("save_masks: ", len(self.binary_images), " masks")
 
         
         try:
@@ -642,7 +662,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         for filen in sorted_file_names:
             if filen.endswith(".bmp"):
                 # read the image and append
-                image = cv2.imread(os.path.join(self.DMD_dir, filen), cv2.IMREAD_GRAYSCALE)
+                image = cv2.imread(os.path.join(self.DMD_dir, filen), cv2.IMREAD_GRAYSCALE) # Read DMD sized images
                 self.soma_masks.append(image)
                 # print the size the DMD_images array
         print(f"cell_number: {len(self.soma_masks)}, image size: {image.shape}")
@@ -694,13 +714,12 @@ class MainGui(QMainWindow, Ui_MainGui): #
         base = self.working_dir
         self.image_dir = os.path.join(base, "Images")
         self.DMD_dir = os.path.join(base, "DMD")
+        self.Squares = os.path.join(self.DMD_dir, "Squares") # directory for the squares images
         self.DMD_group_masks = os.path.join(base, "DMD_Groups")
         self.culture_dir = os.path.join(base, "Culture")
         self.protocols_directory = os.path.join(self.culture_dir, "Protocols")   
 
-       
 
-            
     def _create_new_directories(self):
         chip_number, ok = QInputDialog.getText(self, 'Chip Number', 'Enter the MaxOne chip number:')
         if not (ok and chip_number):

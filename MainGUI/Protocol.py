@@ -2,6 +2,7 @@
 from PySide6.QtWidgets import QMessageBox 
 import random
 import create_sequence as cs
+from pycromanager import JavaObject
 
 # import matplotlib
 # matplotlib.use('Agg')  # Use the non-GUI backend for matplotlib
@@ -14,7 +15,7 @@ class Stage: # called by protocolSet.py
     
     
 
-    def __init__(self, Brigde, images): 
+    def __init__(self, images): 
         # define Culture as parent class
         #   CURRENTLY THE PROTOCOL AND STAGES ARE MIXED TOGETHER!!!! 
 
@@ -40,8 +41,9 @@ class Stage: # called by protocolSet.py
         self.is_probability_stim = False # get checkbox selection of prob_stim
         #self.period = int() # time between triggers in ms
         self.ID = int() # ID of the stage - used to reproduce the stage by the user
-        self.bridge = Brigde # bridge to the Java code
-        self.DMDArray = self.bridge._construct_java_object('java.util.ArrayList') # list of DMD images to be displayed in each sequence
+        # self.bridge = Brigde # bridge to the Java code
+        # self.DMDArray = self.bridge._construct_java_object('java.util.ArrayList') # list of DMD images to be displayed in each sequence
+        self.DMDArray = JavaObject('java.util.ArrayList') # use the core JavaObject from pycromanager to create a Java ArrayList
         self.input_groups = [] # List of lists of cells belonging to each group of stimulated neurons
         self.input_cells = [] # List of all cells to be stimulated by pattened light
         self.output_group = [] # List of cells not to be stimulated by pattened light
@@ -58,7 +60,9 @@ class Stage: # called by protocolSet.py
         self.group_probability_ratio =  1.5 # probability ratio between groups 
         self.group_divider = 3 # number of groups to divide the groupSize into - for the probability stimulation to break the group into smaller groups so the stimulation do not synchronize all cells.
         self.help_counter = 0 # counter for to plot the DMDArray at the first run of the protocol
-        self.start_run_time = None # time of the start of the stage run 
+        self.start_run_time = None # time of the start of the stage run
+        self.square_size = 10
+        self.square_groups = 1 # number of square simultaneuosly presented as a group
         
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -141,6 +145,11 @@ class Stage: # called by protocolSet.py
             cs.create_random_sequence(self) # create_sequence in the Potocol object stage (create_sequence.py)
         elif self.stim_type == 'Sequential':
             cs.create_sequential_sequence(self)
+
+        elif self.stim_type == 'Test':
+            cs.create_test_sequence(self)
+        elif self.stim_type == 'Squares':
+            cs.create_squares_sequence(self)
         else:
             print(f"Error: Unsupported stimulation type '{self.stim_type}'. Please use 'Random' or 'Sequential'.")
 
@@ -154,7 +163,7 @@ class Stage: # called by protocolSet.py
         
         for idx in indices:  # iterate over the groups' indices in the sequence to create the DMD array
             # the groups index corresponds to an image in groups_images
-            ind_image = self.groups_images[idx]  # get the image of the group
+            ind_image = self.groups_images[idx]  # get the image of the group created by create_sequence.py
             self.DMDArray.add(ind_image.ravel())  # add the image to the Java array
 
         # Debugging output

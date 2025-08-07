@@ -111,7 +111,7 @@ class getImage:  # called by init_window.py
             else:
                 sum_frame = (sum_frame + frame)/ (i+1) # each image is weighted by 1/(i+1) to get a sum of 1
                 
-
+        
         print("average done!")
         return sum_frame
 

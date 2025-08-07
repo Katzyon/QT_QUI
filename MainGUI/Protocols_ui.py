@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Protocols.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.9.0
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -93,6 +93,7 @@ class Ui_protocols(object):
         self.gridLayout.addWidget(self.groups_period, 2, 6, 1, 1)
 
         self.stim_type = QComboBox(self.layoutWidget)
+        self.stim_type.addItem("")
         self.stim_type.addItem("")
         self.stim_type.addItem("")
         self.stim_type.addItem("")
@@ -215,6 +216,9 @@ class Ui_protocols(object):
 
         self.retranslateUi(protocols)
 
+        self.stim_type.setCurrentIndex(0)
+
+
         QMetaObject.connectSlotsByName(protocols)
     # setupUi
 
@@ -237,14 +241,19 @@ class Ui_protocols(object):
 #endif // QT_CONFIG(whatsthis)
         self.label_10.setText(QCoreApplication.translate("protocols", u"Jitter", None))
         self.stim_time.setText(QCoreApplication.translate("protocols", u"5", None))
+#if QT_CONFIG(tooltip)
+        self.groupsNumbers.setToolTip(QCoreApplication.translate("protocols", u"When \"Squares\" type, number of simultanous presented squares", None))
+#endif // QT_CONFIG(tooltip)
         self.groupsNumbers.setText(QCoreApplication.translate("protocols", u"Number of \n"
-" groups", None))
+" groups \n"
+" or squares", None))
         self.groups_period.setText(QCoreApplication.translate("protocols", u"400", None))
         self.stim_type.setItemText(0, QCoreApplication.translate("protocols", u"Random", None))
         self.stim_type.setItemText(1, QCoreApplication.translate("protocols", u"Group only stim.", None))
         self.stim_type.setItemText(2, QCoreApplication.translate("protocols", u"Order", None))
         self.stim_type.setItemText(3, QCoreApplication.translate("protocols", u"Test", None))
         self.stim_type.setItemText(4, QCoreApplication.translate("protocols", u"Spontaneous", None))
+        self.stim_type.setItemText(5, QCoreApplication.translate("protocols", u"Squares", None))
 
         self.jitter.setText("")
         self.label_11.setText(QCoreApplication.translate("protocols", u"Background \n"
@@ -264,7 +273,8 @@ class Ui_protocols(object):
 " groups", None))
         self.is_manual_sequence.setText("")
         self.label_9.setText(QCoreApplication.translate("protocols", u"Type", None))
-        self.label_7.setText(QCoreApplication.translate("protocols", u"Group size", None))
+        self.label_7.setText(QCoreApplication.translate("protocols", u"Group size \n"
+" Square size", None))
         self.output_group.setText(QCoreApplication.translate("protocols", u"Output group", None))
         self.label_16.setText(QCoreApplication.translate("protocols", u"Press to define \n"
 " output group", None))

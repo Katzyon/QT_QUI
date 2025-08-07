@@ -86,6 +86,8 @@ from arduino_comm import ArduinoComm
 
 from runProtocol import ProtocolRunner # run the protocol - create the sequence of images to be displayed on the DMD
 from protocolLoader import ProtocolLoader as pl
+from remote_recording_manager import RemoteRecordingManager  # for remote recording management
+from stage_controller import StageController
 # import CreateMasks
 # import DetectSomas
 
@@ -118,8 +120,13 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.binary_images = []
         self.binary_image_all = None
         self.light_click_pixels = 10 # size of the light click pixels in the mainGUI
+        self.light_click_ms_time = 10
         self.img_rotated = None # image with detected cells rotated
         self.rotated_averageImage = None # average image rotated
+        self.manualGroups = []
+        self.recorder = None  # RemoteRecordingManager instance for recording
+        self.chip_number = None  # MaxOne chip number
+        self.pixel_to_stage_affine = None  # Affine transformation matrix from pixel to stage coordinates for mouse optogenetic stimulation
 
         self.monitor = get_monitors()[0]
         # Arduino loaded with file: Serial_trig_randvec_light_delay.ino
@@ -131,6 +138,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.initialize_core() # !!! initialize the core and camera !!!
         self.setup_directories()
         self.connect_buttons()
+        
         # connect to Arduino
         #self.connect_arduino(port=self.arduino_port, baudrate=19200, timeout=2)
         self.arduino_comm = ArduinoComm.connect(port='COM13', baudrate=19200, timeout=2)
@@ -146,7 +154,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
          self.camera = Camera.getImage(self.core)
          self.polygon = Polygon.Polygon(self.core)
          #self.stage = self.core.getXYStageDevice() # Java case CamelCase
-         self.stage = self.core.get_xy_stage_device() # python case snake_case
+         self.xy_stage_device = self.core.get_xy_stage_device() # python case snake_case 
+         self.xy_stage = StageController(self.core, self.xy_stage_device, self.stage_position) # xy stage interface object
          devices = [self.core.get_loaded_devices().get(i) for i in range(self.core.get_loaded_devices().size())]
          print(f"PycroManager connected. Devices: {devices}")
          self.update_stage_pos()
@@ -156,6 +165,16 @@ class MainGui(QMainWindow, Ui_MainGui): #
          traceback.print_exc()
          QMessageBox.critical(self, "Core Error", "Failed to connect to Micro-Manager.\nIs another process (e.g. Jupyter) using Core?\n\nDetails:\n" + str(e))
          self.core = None
+
+    def closeEvent(self, event):
+        print("Closing MainGui.closeEvent-closing all connections and threads")
+        if self.recorder:
+            try:
+                print("Closing server connection...")
+                self.recorder.disconnect()
+            except Exception as e:
+                print(f"Error during disconnect: {e}")
+        super().closeEvent(event)
 
         # Access the ImageView placeholder and set data
         #self.imageView = self.ui.imageview # get the widget promoted to imageview object from the ui_form.py file
@@ -198,11 +217,24 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         self.mouse_shoot.setEnabled(True)
 
-    def mouse_DMD_shoot(self):
-        
+    def mouse_DMD_shoot(self): 
+        # to perform the affine transformation of image to stage coordinates use Affine_stage_image_GUI.py 
+        if not hasattr(self, 'pixel_to_stage_affine'):
+            affine_path = os.path.join(os.getcwd(), "affine_matrix.npy")
+            if os.path.exists(affine_path):
+                try:
+                    self.pixel_to_stage_affine = np.load(affine_path)
+                    print(f"Affine loaded from {affine_path}")
+                except Exception as e:
+                    print(f"Error loading affine_matrix.npy: {e}")
+                    self.pixel_to_stage_affine = None
+            else:
+                print(f"Affine file not found at {affine_path}")
+                self.pixel_to_stage_affine = None
         #self.show_error_message("title","error explanation")
         # get the light_click_pixels_size from the line edit
         self.light_click_pixels = int(self.light_click_pixels_size.text())
+        self.light_click_ms_time = int(self.light_ms_time.text())
 
         if not hasattr(self, 'affine_transform'):
             self.load_old_affine()
@@ -415,6 +447,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("You are probably testing. Try deleting todays culture file ", self.culture_dir,  "and run again")
 
         self.culture.cellsNumber = len(self.soma_masks)
+        #self.culture.unique_cells = self.unique_cells # save the unique cells in the culture object
         # self.transform_images # used in runProtocol.py ProtocolRunner
         self.culture.save() # save the culture object with the new number of cells
         
@@ -459,28 +492,32 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         
 # emitted signal from cell_picker_widg when the window is closed
+# handles the manual selected groups
     def handle_groups_ready(self, groups):
         """Handle the groups_ready signal from the cell_picker_widg"""
-
-        #self.manualGroups = groups
+        self.manualGroups = []  # Initialize manualGroups
         print("maingui handle_groups_ready: ", groups)
         
-        self.manualGroups = []
         for group in groups:
             self.manualGroups.append(group['cells'])
         print("manualGroups:", self.manualGroups)
         # create self.manual_sequence which includes the list of the manualGroups and the remaining_cells.
         # the remaining_cells are the cells that were not selected manually
-        print("type of self.unique_cells:", type(self.unique_cells))
-        remaining_cells = self.unique_cells.tolist() # convert numpy array to list
-        for group in self.manualGroups:
-            for cell in group:
-                remaining_cells.remove(cell)
+        # print("type of self.culture.unique_cells:", type(self.culture.unique_cells))
+        # print("type of self.unique_cells:", type(self.unique_cells))
         
-        self.remainingManualCells = [[item] for item in remaining_cells] # list the remaining cells separately as groups of 1 cell each
-        self.manual_sequence = self.manualGroups + self.remainingManualCells
-        print("manual_sequence:", self.manual_sequence)
-        # update isManual
+        
+        # #remaining_cells = self.unique_cells.tolist() # convert numpy array to list
+        # remaining_cells = list(range(len(self.protocol.images)))
+        # for group in self.manualGroups:
+        #     for cell in group:
+        #         remaining_cells.remove(cell)
+        
+        # self.remainingManualCells = [[item] for item in remaining_cells] # list the remaining cells separately as groups of 1 cell each
+        # self.manual_sequence = self.manualGroups + self.remainingManualCells # NOT IS USE! create the manual sequence a list of the manual groups and the remaining cells as groups of ones.
+        # # print("manual_sequence:", self.manual_sequence)
+        
+        # # update isManual
         
 
 
@@ -568,8 +605,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.stages_table = data # data is the protocol csv file as a dataframe returned from the file_loader_dialog
         self.protocol = ps(self) # create the Protocol setting object by protocolSet.py file
         self.protocol.extract_protocol() # 
-        print("self.protocol.stages.numberCells: ", self.protocol.stages[0].number_cells)
-        print("self.protocol.stages.repeats: ", self.protocol.stages[0].sequence_repeats)
+        # print("self.protocol.stages.numberCells: ", self.protocol.stages[0].number_cells)
+        # print("self.protocol.stages.repeats: ", self.protocol.stages[0].sequence_repeats)
 
         # print the size of sequences_images in prot object
         # for i in range(len(self.protocol.stages[0].sequences_images)):
@@ -590,7 +627,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("Protocol set")
             print(self.stages_table)
 
-            #print("DMDArray size", len(self.protocol.stages[0].DMDArray))
+            
             # run the protocol
             self.protocol_runner = ProtocolRunner(self)
             self.protocol_runner.start() # run the protocol
@@ -721,12 +758,12 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
 
     def _create_new_directories(self):
-        chip_number, ok = QInputDialog.getText(self, 'Chip Number', 'Enter the MaxOne chip number:')
-        if not (ok and chip_number):
+        self.chip_number, ok = QInputDialog.getText(self, 'Chip Number', 'Enter the MaxOne chip number:')
+        if not (ok and self.chip_number):
             print("Chip number input cancelled.")
             return
 
-        self.working_dir = os.path.join(self.user_dir, chip_number)
+        self.working_dir = os.path.join(self.user_dir, self.chip_number)
 
         if os.path.exists(self.working_dir):
             self.show_error_message("Directory exists", "The directory already exists. Please select a different directory.")
@@ -780,6 +817,35 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.update_stage.clicked.connect(self.update_stage_pos) # connect update_stage button to update_stage function
         self.zero_stage.clicked.connect(self.zero_stage_pos) # connect zero_stage button to zero_stage function
         self.move_stage.clicked.connect(self.move_stage_pos) # connect move_stage button to move_stage function
+        self.record_button.clicked.connect(self.init_recording) # connect recording button to init_recording function
+
+    def init_recording(self):
+        if self.recorder is not None:
+            print("Recorder is already initialized and connected.")
+            return
+
+        print("Initializing RemoteRecordingManager...")
+        # check if the chip number is set
+        if not hasattr(self, 'chip_number') or not self.chip_number:
+            self.chip_number = self.working_dir.split(os.sep)[-1]  # Use the last part of the working directory as chip number
+        print("chip number was artificially set")
+
+        self.recorder = RemoteRecordingManager(
+            host="132.77.68.106",
+            port=7215,
+            save_dir="/home/mxwbio/Data/recordings",
+            file_prefix=self.chip_number  # file name + stage index
+        )
+
+        try:
+            self.recorder.connect()
+            time.sleep(1)  # wait for connection to stabilize
+            print("Recorder connected successfully.")
+            print(f"Recorder save directory: {self.recorder.save_dir} , file prefix: {self.recorder.file_prefix}")
+        except Exception as e:
+            print(f"Error connecting to recorder: {e}")
+            self.recorder = None
+
 
     def connect_arduino(self, port='COM13', baudrate=19200, timeout=2):
 
@@ -798,39 +864,25 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # The selected cells will be saved in the self.testGroupCells variable
         pass
 
+    def get_stage_position(self):
+        self.xy_stage.get_position()
+
+
     def update_stage_pos(self):
-        # Update the stage position in the GUI following manual movement and button press
-        try:
-            x = self.core.get_x_position(self.stage)
-            y = self.core.get_y_position(self.stage)
-            # Update the stage position labels in the GUI
-            self.stage_position.setText(f"{x:.2f},{y:.2f}")
-            
-            print(f"Stage position updated: X={x}, Y={y}")
-        except Exception as e:
-            print(f"Error updating stage position: {e}")
+        # Update the microscope stage position in the GUI
+        self.xy_stage.update_gui()
+
         
     def zero_stage_pos(self):
         # set the current poisition as zero position
-        try:
-            self.core.set_adapter_origin_xy(self.stage, 0.0, 0.0)
-            print("Stage position set to zero.")
-            self.update_stage_pos()  # Update the GUI after zeroing
-        except Exception as e:
-            print(f"Error zeroing stage position: {e}")
+        self.xy_stage.zero()
 
     def move_stage_pos(self):
     # read position from text field and Move the stage to a specified position
-        try:
-            x = int(self.xpos.text())
-            y = int(self.ypos.text())
-            self.core.set_xy_position(self.stage, x, y)
-            self.core.wait_for_device(self.stage)  # Wait for the stage to finish moving
-            print(f"Stage moved to position: X={x}, Y={y}")
-            self.update_stage_pos()  # Update the GUI after moving
-        except Exception as e:
-            print(f"Error moving stage: {e}")
-            self.show_error_message("Stage Movement Error", f"Could not move stage: {e}", QMessageBox.Critical)
+        
+        x = int(self.xpos.text())
+        y = int(self.ypos.text())
+        self.xy_stage.move_to(x, y)
        
         
 

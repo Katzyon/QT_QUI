@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'form.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.0
+## Created by: Qt User Interface Compiler version 6.9.0
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -85,7 +85,7 @@ class Ui_MainGui(object):
         self.somasStims.setGeometry(QRect(30, 290, 111, 24))
         self.ManualGroup = QPushButton(self.centralwidget)
         self.ManualGroup.setObjectName(u"ManualGroup")
-        self.ManualGroup.setGeometry(QRect(30, 330, 101, 24))
+        self.ManualGroup.setGeometry(QRect(30, 330, 141, 24))
         self.label_5 = QLabel(self.centralwidget)
         self.label_5.setObjectName(u"label_5")
         self.label_5.setGeometry(QRect(120, 130, 111, 16))
@@ -121,25 +121,25 @@ class Ui_MainGui(object):
         self.testGroup.setGeometry(QRect(230, 360, 111, 24))
         self.light_click_pixels_size = QLineEdit(self.centralwidget)
         self.light_click_pixels_size.setObjectName(u"light_click_pixels_size")
-        self.light_click_pixels_size.setGeometry(QRect(150, 250, 41, 22))
+        self.light_click_pixels_size.setGeometry(QRect(170, 250, 31, 22))
         self.label_7 = QLabel(self.centralwidget)
         self.label_7.setObjectName(u"label_7")
-        self.label_7.setGeometry(QRect(130, 230, 81, 16))
+        self.label_7.setGeometry(QRect(170, 210, 61, 31))
         self.groupBox = QGroupBox(self.centralwidget)
         self.groupBox.setObjectName(u"groupBox")
         self.groupBox.setGeometry(QRect(30, 440, 251, 171))
-        self.widget = QWidget(self.groupBox)
-        self.widget.setObjectName(u"widget")
-        self.widget.setGeometry(QRect(20, 20, 218, 150))
-        self.verticalLayout = QVBoxLayout(self.widget)
+        self.layoutWidget = QWidget(self.groupBox)
+        self.layoutWidget.setObjectName(u"layoutWidget")
+        self.layoutWidget.setGeometry(QRect(20, 20, 218, 150))
+        self.verticalLayout = QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
-        self.update_stage = QPushButton(self.widget)
+        self.update_stage = QPushButton(self.layoutWidget)
         self.update_stage.setObjectName(u"update_stage")
 
         self.verticalLayout.addWidget(self.update_stage)
 
-        self.stage_position = QLabel(self.widget)
+        self.stage_position = QLabel(self.layoutWidget)
         self.stage_position.setObjectName(u"stage_position")
         font = QFont()
         font.setPointSize(14)
@@ -149,34 +149,34 @@ class Ui_MainGui(object):
 
         self.verticalLayout.addWidget(self.stage_position)
 
-        self.zero_stage = QPushButton(self.widget)
+        self.zero_stage = QPushButton(self.layoutWidget)
         self.zero_stage.setObjectName(u"zero_stage")
 
         self.verticalLayout.addWidget(self.zero_stage)
 
-        self.move_stage = QPushButton(self.widget)
+        self.move_stage = QPushButton(self.layoutWidget)
         self.move_stage.setObjectName(u"move_stage")
 
         self.verticalLayout.addWidget(self.move_stage)
 
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.label_8 = QLabel(self.widget)
+        self.label_8 = QLabel(self.layoutWidget)
         self.label_8.setObjectName(u"label_8")
 
         self.horizontalLayout.addWidget(self.label_8)
 
-        self.xpos = QLineEdit(self.widget)
+        self.xpos = QLineEdit(self.layoutWidget)
         self.xpos.setObjectName(u"xpos")
 
         self.horizontalLayout.addWidget(self.xpos)
 
-        self.label_9 = QLabel(self.widget)
+        self.label_9 = QLabel(self.layoutWidget)
         self.label_9.setObjectName(u"label_9")
 
         self.horizontalLayout.addWidget(self.label_9)
 
-        self.ypos = QLineEdit(self.widget)
+        self.ypos = QLineEdit(self.layoutWidget)
         self.ypos.setObjectName(u"ypos")
 
         self.horizontalLayout.addWidget(self.ypos)
@@ -184,6 +184,15 @@ class Ui_MainGui(object):
 
         self.verticalLayout.addLayout(self.horizontalLayout)
 
+        self.light_ms_time = QLineEdit(self.centralwidget)
+        self.light_ms_time.setObjectName(u"light_ms_time")
+        self.light_ms_time.setGeometry(QRect(130, 250, 31, 22))
+        self.label_10 = QLabel(self.centralwidget)
+        self.label_10.setObjectName(u"label_10")
+        self.label_10.setGeometry(QRect(130, 210, 31, 31))
+        self.record_button = QPushButton(self.centralwidget)
+        self.record_button.setObjectName(u"record_button")
+        self.record_button.setGeometry(QRect(390, 590, 91, 24))
         MainGui.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainGui)
         self.menubar.setObjectName(u"menubar")
@@ -244,7 +253,7 @@ class Ui_MainGui(object):
 #if QT_CONFIG(whatsthis)
         self.ManualGroup.setWhatsThis(QCoreApplication.translate("MainGui", u"<html><head/><body><p>Manually grouping detected cells by mouse click</p></body></html>", None))
 #endif // QT_CONFIG(whatsthis)
-        self.ManualGroup.setText(QCoreApplication.translate("MainGui", u"Click and group", None))
+        self.ManualGroup.setText(QCoreApplication.translate("MainGui", u"Click and group manual", None))
         self.label_5.setText(QCoreApplication.translate("MainGui", u"CellPose Diameter", None))
         self.cellpose_diameter.setText(QCoreApplication.translate("MainGui", u"13", None))
         self.RandGroup.setText(QCoreApplication.translate("MainGui", u"Random grouping", None))
@@ -260,7 +269,8 @@ class Ui_MainGui(object):
 #endif // QT_CONFIG(tooltip)
         self.testGroup.setText(QCoreApplication.translate("MainGui", u"Set Test group", None))
         self.light_click_pixels_size.setText(QCoreApplication.translate("MainGui", u"10", None))
-        self.label_7.setText(QCoreApplication.translate("MainGui", u"Light pixel size", None))
+        self.label_7.setText(QCoreApplication.translate("MainGui", u"Light pixel \n"
+" size", None))
         self.groupBox.setTitle(QCoreApplication.translate("MainGui", u"Stage", None))
 #if QT_CONFIG(tooltip)
         self.update_stage.setToolTip("")
@@ -285,6 +295,13 @@ class Ui_MainGui(object):
         self.xpos.setText(QCoreApplication.translate("MainGui", u"10", None))
         self.label_9.setText(QCoreApplication.translate("MainGui", u"Y", None))
         self.ypos.setText(QCoreApplication.translate("MainGui", u"10", None))
+        self.light_ms_time.setText(QCoreApplication.translate("MainGui", u"10", None))
+        self.label_10.setText(QCoreApplication.translate("MainGui", u"Light \n"
+" time", None))
+#if QT_CONFIG(whatsthis)
+        self.record_button.setWhatsThis(QCoreApplication.translate("MainGui", u"<html><head/><body><p>Perform calibration between camera image and DMD.</p></body></html>", None))
+#endif // QT_CONFIG(whatsthis)
+        self.record_button.setText(QCoreApplication.translate("MainGui", u"Run Recorder", None))
         self.menuTab.setTitle(QCoreApplication.translate("MainGui", u"Tab", None))
         self.menuTab2.setTitle(QCoreApplication.translate("MainGui", u"Tab2", None))
     # retranslateUi

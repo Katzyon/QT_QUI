@@ -83,6 +83,7 @@ class protocol_set(QDialog, Ui_protocols):
             "on_time": self.on_time.text(),  # onTime
             "is_manual_sequence": self.is_manual_sequence.isChecked(),
             "prob_stim": self.prob_stim.isChecked(),
+            "record_stage": self.record_stage.isChecked(),
             
             # Other parameters...
         }
@@ -155,7 +156,7 @@ class protocol_set(QDialog, Ui_protocols):
         # print the stages_table dataframe
         print("Protocol design", self.stages_table)
         #
-        self.show_message("Protocol Saved", "The protocol is saved. You can close the window now.")
+        self.show_message("Protocol Saved", "The protocol was saved. You can close the window now.")
         
     def show_message(self, title, message, icon_type=QMessageBox.Information):
         

@@ -12,6 +12,7 @@ import random
 import time
 import numpy as np
 import threading
+import traceback
 #import matplotlib.pyplot as plt
  # (masks > 0).astype(np.uint8)
 
@@ -29,6 +30,7 @@ class ProtocolRunner(QThread):
         self.currentStage = 0
         #self.arduino = gui.arduino # arduino object to control the polygon, light source and MaxOne digipins
         self.arduino_comm = gui.arduino_comm # arduino communication object to send messages to the Arduino
+        self.recorder = gui.recorder  # RemoteRecordingManager instance for recording - currently manually initialized in the main GUI
 
         # print(dir(self.stages))
 
@@ -84,11 +86,13 @@ class ProtocolRunner(QThread):
         # add the current protocol to the .protocols list in the culture object
         
         
+        # print the number of stages in the protocol
+        print("Number of stages in the protocol:", len(self.stages))
+        
+        
         
         try:
             for stage_index, stage in enumerate(self.stages): # iterate over the number of stages in protocol
-
-
                 if self.stop_event.is_set():
                         print("Aborting the run")
                         break
@@ -101,8 +105,11 @@ class ProtocolRunner(QThread):
                     #self.culture.save() # save the culture object to the disk - handled in culture_data.py
                     self.protocol.save_protocol(self.culture.protocols_number)    # save the protocol to the culture folders. handled in culture_data.py
                     
+                if stage.recording: # if the stage is set to record
+                    self.recorder.start_recording(stage_index)
 
                 sequence = stage.sequence
+                print("Stage index:", stage_index, "Sequence length:", len(sequence), "Sequence repeats:", stage.sequence_repeats)
                 # save the sequence to disk - handled in culture_data.py
                 #start_time = time.time() # get the current time
                 stage.start_run_time = time.time() # time of the start of the stage run
@@ -119,98 +126,68 @@ class ProtocolRunner(QThread):
                 # Update the stage start time and save it.
                 self.protocol.save_start_time(stage_index, stage.start_run_time)
 
-                for seq_repeat in range(stage.sequence_repeats): # iterate over the number of repeats of the stage
-                    
-
-                    # wait 100ms
-                    #self.msleep(100) # wait for file saving
-
+                for seq_repeat in range(stage.sequence_repeats): # iterate over the number of repeats of the stage             
 
                     # use the sequence to create DMDArray of arduino_buffer size images (bound the Arduino buffer)
                     # running over the sequence with chuncks (steps) of arduino_buffer size
                     for i in range(0, len(sequence), arduino_buffer): # iterate over the length of arduino_buffer in the sequence
-                            current_display_indices = sequence[i:i+arduino_buffer] # get the indices of the groups to be displayed
-                            stage.create_DMDArray(current_display_indices) # create the DMDArray of images to be displayed on the DMD
+                        current_display_indices = sequence[i:i+arduino_buffer] # get the indices of the groups to be displayed
+                        stage.create_DMDArray(current_display_indices) # create the DMDArray of images to be displayed on the DMD
 
-                            # print the size of the java array DMDArray
-                            print("DMDArray size:", stage.DMDArray.size())
-                            self.core.load_slm_sequence(self.dmd_name, stage.DMDArray) # load the sequence to the DMD
-                            self.msleep(len(current_display_indices)*4) # wait for the DMD to load the sequence - 4 ms per image
+                        # print the size of the java array DMDArray
+                        #print("DMDArray size:", stage.DMDArray.size())
+                        self.core.load_slm_sequence(self.dmd_name, stage.DMDArray) # load the sequence to the DMD
+                        self.msleep(len(current_display_indices)*4) # wait for the DMD to load the sequence - 4 ms per image
+                        
 
-                            if self.stop_event.is_set():
-                                print("Aborting the run")
-                                self.core.stop_slm_sequence(self.dmd_name)
-                                QThread.sleep(1)
-                                
-                                # Check if the DMD is responding
-                                try: # check if the DMD is responding
-                                    device_label = self.gui.core.get_property(self.dmd_name, "Label")
-                                    print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")    
-                                    self.core.set_slm_image(self.dmd_name, self.black_image) # display black image
-                                    self.core.display_slm_image(self.dmd_name) # display black image
-                                except Exception as e:
-                                    # If an exception occurs, communication is likely disrupted
-                                    print(f"Communication failed for device '{self.dmd_name}'. Error: {e}")         
-                                break
-
-                            # self.times += int(self.stages[index].stim_time) # validation of run timing - TBA
-
-                            # Use Arduino to trigger the presentation of the images
-                            arduino_display_indices = [x + 1 for x in sequence[i:i+arduino_buffer]] # adds 1 to the groups due to issues with Arduino encoding zeros digipins
+                        if self.stop_event.is_set():
+                            print("Aborting the run")
+                            self.core.stop_slm_sequence(self.dmd_name)
+                            QThread.sleep(1)
                             
-                            
-                            # message = f"{arduino_display_indices},{self.stages[stage_index].groups_period},{self.stages[stage_index].on_time}\n"
-                            # self.arduino.write(message.encode()) # Length of message is limited due to Arduino buffer overflow - ~19 numbers
-                            # print(f"Message sent to Arduino: {message.strip()}") # uncheck to validate the message sent to Arduino
-                      
-                            # while not self.stop_event.is_set(): # Wait for Arduino to confirm it received the message
-                            #     if self.arduino.in_waiting > 0:
-                            #         response = self.arduino.readline().decode().strip()
-                            #         #print(f"Arduino response: {response}") # uncheck to validate arduino response
-                            #         if response == "Message received":
-                            #             #print("Arduino confirmed message received. Starting sequence.")
-                            #             break
+                            # Check if the DMD is responding
+                            try: # check if the DMD is responding
+                                device_label = self.gui.core.get_property(self.dmd_name, "Label")
+                                print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")    
+                                self.core.set_slm_image(self.dmd_name, self.black_image) # display black image
+                                self.core.display_slm_image(self.dmd_name) # display black image
+                            except Exception as e:
+                                # If an exception occurs, communication is likely disrupted
+                                print(f"Communication failed for device '{self.dmd_name}'. Error: {e}")         
+                            break
 
-                            # send the message to the Arduino via adruino_comm.py
-                            #self.arduino_comm.send_message(arduino_display_indices, self.stages[stage_index].groups_period, self.stages[stage_index].on_time) # send the message to the Arduino 
-                            self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time) # start the sequence by the Arduino
+                        # self.times += int(self.stages[index].stim_time) # validation of run timing - TBA
 
-                            self.core.start_slm_sequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input to display the images
-                            #print("Sequence started - waiting for trigger")
+                        # Use Arduino to trigger the presentation of the images
+                        arduino_display_indices = [x + 1 for x in sequence[i:i+arduino_buffer]] # adds 1 to the groups due to issues with Arduino encoding zeros digipins    
+                        
+                        # message = f"{arduino_display_indices},{self.stages[stage_index].groups_period},{self.stages[stage_index].on_time}\n"
+                        # self.arduino.write(message.encode()) # Length of message is limited due to Arduino buffer overflow - ~19 numbers
+                        # print(f"Message sent to Arduino: {message.strip()}") # uncheck to validate the message sent to Arduino
+                    
+                        self.core.start_slm_sequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input (to Polygon and LED) to display the images
+                        self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time) # Upload the sequence part to Arduino and trigger teh display of the images
+                        response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event) # wait for the Arduino to finish the sequence
 
-                            # while not self.stop_event.is_set(): # As long as stop wasn't pressed, wait for Arduino to confirm it received the message
-                            #     if self.arduino.in_waiting > 0:
-                            #         response = self.arduino.readline().decode().strip()
-                            #         print(f"Arduino response: {response}") # uncheck to see the presented images indices
-                            #         if "Sequence finished" in response:
-                            #             print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
-                            #             break
-                            response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event) # wait for the Arduino to finish the sequence
+                        if response: # for test purposes - validate the response from Arduino
+                            print(f"Arduino response: {response}")
+                            print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
+                        else:
+                            print("Arduino wait exited (stopped or error).")
+                            break
+                    # sequence cuts loop ends here
 
-                            if response:
-                                print(f"Arduino response: {response}")
-                                print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
-                            else:
-                                print("Arduino wait exited (stopped or error).")
-                                break
-
+                    # at the end of each sequence:
                     self.core.stop_slm_sequence(self.dmd_name) # stop the sequence  - findout where to put it !!!!!!       
                     print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[stage_index].sequence_repeats} completed by Arduino.")    
-
-      
-                    # no trigger display
-                    # # DISPLAY THE IMAGES - iterate over the repeats of the stage
-                    # for i in range(self.stages[index].groupsNumber): #prot.stages[0].imageRepeats
-                    #     #print("stage:", index +1, "repeat:", i, "of ", self.stages[index].imageRepeats)
-                    #     if self.stop_event.is_set():
-                    #         print("Aborting the run")
-                    #         break
-
-                    #     self.core.displaySLMImage(self.dmd_name) # advance to the next image in the sequence
-                    #     self.msleep(self.stages[index].interMaskInterval) # sleep between each group (image) presentation in the sequence
-
-        except Exception as e:
+                # seq_repeat loop ends here
+                if stage.recording:  # if the stage is set to record
+                    self.recorder.stop_recording()
+            # stages loop ends here
+            # stop the recording if it was started
+        except Exception as e:  # try catch for stage_index, stage loop
             print("Error in runProtocol:", e)
+            traceback.print_exc()
 
 
         end_time = time.time()

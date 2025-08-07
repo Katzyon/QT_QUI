@@ -1,0 +1,5 @@
+stim_type,jitter,background_freq,groups_period,group_size,groups_number,stim_time,on_time,is_manual_sequence,prob_stim,record_stage,output_group
+Random,FALSE,1,60,40,1,1,5,FALSE,FALSE,FALSE,[]
+Random,FALSE,1,60,40,1,1,5,FALSE,FALSE,TRUE,[]
+Random,FALSE,1,60,40,1,1,5,FALSE,FALSE,FALSE,[]
+Random,FALSE,1,60,40,1,1,5,FALSE,FALSE,TRUE,[]

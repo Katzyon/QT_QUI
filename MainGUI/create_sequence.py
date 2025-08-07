@@ -1,4 +1,5 @@
 # called by protocolSet.py via Protocol object to create the sequence of images to be displayed on the DMD
+# create the sequence indices (stage.sequence) and the images (stage.groups_images) to be displayed on the DMD
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,10 +20,10 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
     print("all stimulated cells", stage.input_cells, "number of groups", stage.groups_number, "group size", stage.group_size)
 
     # create groups without the output group cell picked by the user
-    for _ in range(stage.groups_number):
-        group = random.sample(all_cells, stage.group_size)
+    for _ in range(stage.groups_number): # creates the major groups
+        group = random.sample(all_cells, stage.group_size) # randomly select cells from the list of all cells
         print("sequence group", group)
-        stage.groups.append(group)
+        stage.groups.append(group) # add the group to the stage groups list
         # Remove the selected cells to ensure no repeats
         for cell in group:
             all_cells.remove(cell)
@@ -32,7 +33,7 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
     stage.remaining_cells = [all_cells] # what happens with the remaining cells? - they are not stimulated?
 
     # create the main groups probabilities
-    stage.group_probabilities = create_decay_probabilities(stage.groups_number, stage.group_probability_ratio)
+    stage.group_probabilities = create_decay_probabilities(stage.groups_number, stage.group_probability_ratio) 
 
     smaller_groups = []
     smaller_group_probabilities = []
@@ -50,8 +51,10 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
             smaller_group = group[start_idx:end_idx]
             smaller_groups.append(smaller_group)
             
-            # Assign probability for each smaller group based on the given formula
-            smaller_group_probability = (highest_group_prob - stage.group_probabilities[i]) / stage.group_divider
+            # Assign probability for each smaller group (SG) such that its probability + its major group (MG) P would be equal to the highest probability group (HG)
+            # p(HG) = p(MG1) + p(SG1) = p(MG2) + p(SG2)
+            # p(MG1) > p(MG2) and p(SG1) < p(SG2) since the p for the first group is the highest and decays by stage.group_probability_ratio for the others
+            smaller_group_probability = (highest_group_prob - stage.group_probabilities[i]) # / stage.group_divider
             smaller_group_probabilities.append(smaller_group_probability)
 
 
@@ -62,11 +65,11 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
 
     # Add the highest probability group back to the combined list
     all_groups_but_high.insert(0, stage.groups[0])
-    all_probabilities.insert(0, stage.group_probabilities[0])
+    all_probabilities.insert(0, stage.group_probabilities[0]) # add the highest probability group back to the list
 
     # Normalize all probabilities to sum to 1
     total_prob_all = sum(all_probabilities)
-    all_probabilities = [prob / total_prob_all for prob in all_probabilities]
+    all_probabilities = [prob / total_prob_all for prob in all_probabilities] # normalize the probabilities
 
     n_presentations = len(all_groups_but_high) * stage.group_distribution_number
     stage.sequence = random.choices(range(len(all_groups_but_high)), weights=all_probabilities, k=n_presentations)
@@ -126,8 +129,28 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
 
 
 
-def create_sequential_sequence(stage):
-    pass
+def create_order_sequence(stage):
+    # create a sequence of images according to the order of the groups (same probability for all groups)
+    # repeat the basic sequence many times
+   
+    print("create_order_sequence called")   
+    n = stage.group_distribution_number* stage.groups_number # number of repetitions of the sequence
+    stage.sequence = np.tile(np.arange(stage.groups_number), n).tolist()
+    
+    print("manual groups:", stage.groups)
+    for group in stage.groups: # group is a list of cells either of size 1 or larger
+        print("group:", group)
+        group_images = []
+        for cell in group: # [1, 3, 11] - list of cells in the group
+            group_images.append(stage.images[cell - 1])
+
+        # sum the images in the group
+        group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
+        stage.groups_images.append(group_sum) # add one image to the sequence
+        print("group image shape:", group_sum.shape)
+        
+
+
 
 
 def create_decay_probabilities(groupsNumber, group_probability_ratio):

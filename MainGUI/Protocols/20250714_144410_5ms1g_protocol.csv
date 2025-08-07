@@ -1,0 +1,2 @@
+stim_type,jitter,background_freq,groups_period,group_size,groups_number,stim_time,on_time,is_manual_sequence,prob_stim,output_group
+Order,False,1,1200,12,1,3,5,True,False,[]

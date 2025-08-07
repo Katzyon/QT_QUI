@@ -1,7 +1,7 @@
 
 
 
-# protocoSet class for setting the protocol parameters before running it
+# protocolSet class for setting the protocol parameters before running it
 # activated following the "Load Protocol" button in the main window
 # It create_stimulation_sequence which is the sequence of images to be displayed on the DMD (self.bridge._construct_java_object)
 #
@@ -23,6 +23,7 @@ class ProtocolSet():
             super(ProtocolSet, self).__init__()
             self.stages_table = gui.stages_table # dataframe of the protocol
             self.manual_sequence = gui.manual_sequence # list of manually selected groups
+            self.manual_groups = gui.manualGroups # list of manually selected groups
             self.images = gui.soma_masks # list of images of the cells somata
             #self.bridge = gui.core._get_bridge() # get the Java bridge to create Java SLM sequence (JavaObject)
             #self.sequences = [] # list of lists of the sequence of image INDICES to be displayed on the DMD
@@ -67,7 +68,7 @@ class ProtocolSet():
                 print(f"stage num: {index + 1}; repeats: {stage.sequence_repeats}")
 
             
-        def _create_stage_from_row(self, row, index):
+        def _create_stage_from_row(self, row, index): # called by extract_protocol
             """Helper function to create and configure a Stage object from a DataFrame row."""
             stage = Stage(self.images) # call the Stage from Protocol.py
             stage.number = index + 1
@@ -86,7 +87,20 @@ class ProtocolSet():
             stage.background_on_time = 5
             stage.stim_time = int(row['stim_time'])
             stage.cycle_time = stage.groups_period
-            stage.create_sequence()
+            # set the recording flag from the boolean checkbox in the GUI 
+            stage.recording = bool(row['record_stage'])
+
+
+            print("P_set number of groups:", stage.groups_number)
+
+            if stage.is_manual:
+                # If manual sequence is selected, use the manual_sequence from the GUI
+                #stage.sequence = self.manual_sequence # manual sequence ??? 
+                stage.groups = self.manual_groups
+                stage.groups_number = len(stage.groups) # number of groups in the manual sequence
+                
+
+            stage.create_sequence() # 
             stage.calc_interMaskInterval()
             return stage     
 

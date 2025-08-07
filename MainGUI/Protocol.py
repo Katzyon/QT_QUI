@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QMessageBox
 import random
 import create_sequence as cs
 from pycromanager import JavaObject
+from math import ceil
 
 # import matplotlib
 # matplotlib.use('Agg')  # Use the non-GUI backend for matplotlib
@@ -58,11 +59,12 @@ class Stage: # called by protocolSet.py
         self.ard_buffer = 18 # number of integers to be sent to the Arduino buffer - to sync with MaxOne
         self.group_distribution_number = 50 # Average number of group presentations in the sequence 
         self.group_probability_ratio =  1.5 # probability ratio between groups 
-        self.group_divider = 3 # number of groups to divide the groupSize into - for the probability stimulation to break the group into smaller groups so the stimulation do not synchronize all cells.
+        self.group_divider = 2 # number of groups to divide the groupSize into - for the probability stimulation to break the group into smaller groups so the stimulation do not synchronize all cells.
         self.help_counter = 0 # counter for to plot the DMDArray at the first run of the protocol
         self.start_run_time = None # time of the start of the stage run
         self.square_size = 10
         self.square_groups = 1 # number of square simultaneuosly presented as a group
+        self.recording = False # flag to indicate if the stage is being recorded
         
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -80,7 +82,8 @@ class Stage: # called by protocolSet.py
 
     def calc_interMaskInterval(self):
         
-        self.inter_mask_interval = (self.groups_period / self.groups_number) - self.on_time # ms
+        #self.inter_mask_interval = (self.groups_period / self.groups_number) - self.on_time # ms
+        self.inter_mask_interval = self.groups_period - self.on_time
         
         # show a warning window if inter_mask_interval is negative
         if self.inter_mask_interval < 0:
@@ -98,7 +101,7 @@ class Stage: # called by protocolSet.py
             # it means that you should decrease the numbers of groups by increasing group size or group the remaining cells into larger groups (2 cells instead of 1) 
 
         self.cycle_time = self.inter_mask_interval*len(self.sequence)/1000 # one cycle of a sequence in seconds
-        self.sequence_repeats = round(self.stim_time*60 / self.cycle_time) # number of protocol repeats for running the protocol
+        self.sequence_repeats = ceil(self.stim_time*60 / self.cycle_time) # number of protocol repeats for running the protocol
         print("stimTime sec:", self.stim_time*60, "cycleTime sec:", self.cycle_time, "n sequence repeats =", self.sequence_repeats) 
 
         print("protocol time", self.stim_time*60, "sec") # can have few stages with different times???
@@ -143,8 +146,8 @@ class Stage: # called by protocolSet.py
             # create_sequence
             
             cs.create_random_sequence(self) # create_sequence in the Potocol object stage (create_sequence.py)
-        elif self.stim_type == 'Sequential':
-            cs.create_sequential_sequence(self)
+        elif self.stim_type == 'Order': # create repeated stimulation according to the order of the groups
+            cs.create_order_sequence(self)
 
         elif self.stim_type == 'Test':
             cs.create_test_sequence(self)
@@ -156,7 +159,7 @@ class Stage: # called by protocolSet.py
 
 
 
-    def create_DMDArray(self, indices):  # replaces def create_stimulation_sequence in protocolSet.py CALLED by protocolSet.py via Protocol object
+    def create_DMDArray(self, indices):  # called by runProtocol.py
 
         # clear the DMDArray
         self.DMDArray.clear()
@@ -164,6 +167,7 @@ class Stage: # called by protocolSet.py
         for idx in indices:  # iterate over the groups' indices in the sequence to create the DMD array
             # the groups index corresponds to an image in groups_images
             ind_image = self.groups_images[idx]  # get the image of the group created by create_sequence.py
+            # ERROR? Order stimulation? Check the is_manual checkbox in the protocol design 
             self.DMDArray.add(ind_image.ravel())  # add the image to the Java array
 
         # Debugging output

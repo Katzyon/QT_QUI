@@ -53,7 +53,16 @@ class getImage:  # called by init_window.py
             # reshape the 1D array to 2D array
             pixels = np.reshape(tagged_image.pix,
                                 newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']]) # reshape the 1D array to 2D array
-            pixels = pixels.astype(np.uint8) # convert to uint8
+            #pixels = pixels.astype(np.uint8) # convert to uint8
+
+            pixels = np.clip(pixels, 0, 255).astype(np.uint8)
+
+
+            # Clip to remove outliers (optional but recommended)
+            # low = np.percentile(pixels, 1)
+            # high = np.percentile(pixels, 99.9)
+            # pixels = np.clip(pixels, low, high)
+            # pixels = ((pixels - low) / (high - low) * 255).astype(np.uint8)
             # qImg = QImage(pixels.data, pixels.shape[1], pixels.shape[0], QImage.Format_Grayscale8)
             # pixmap = QPixmap.fromImage(qImg) # Convert the QImage to a QPixmap
             return pixels

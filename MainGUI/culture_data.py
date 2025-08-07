@@ -26,12 +26,13 @@ class Culture:
         self.directory = directory  # Main directory for culture data (chip number= single culture)
         self.culture_dir = os.path.join(directory, "Culture")  # Directory for culture data
         self.subject = None
-
+        self.chip_number = None  # Chip number for the culture, set by the main GUI
         # Define directories
         self.image_dir = os.path.join(directory, "Images")  
         #self.save_directory = os.path.join(directory, "Culture")  
         self.protocols_directory = os.path.join(directory, "Protocols")  
         self.current_protocol_dir = None
+        self.unique_cells = []  # List of unique cells in the culture
 
         self.initialize_new_culture()
 

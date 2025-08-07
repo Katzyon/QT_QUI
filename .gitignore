@@ -1,3 +1,24 @@
+# Ignore all Google Slides and Google Sheets files
 *.gslides
+*.gsheet
+*.gdoc
+
+# Ignore Python virtual environments
+venv/
 MainGUI/venv/
-Edit the QT maingui.gdoc
+**/venv/
+.venv/
+**/.venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore all .srctrldb files
+*.srctrldb
+
+# Qt Creator user/project files
+*.srctrlprj
+*.srctrlbm
+*.user
+*.pro.user

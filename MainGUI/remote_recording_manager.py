@@ -9,7 +9,7 @@ class RemoteRecordingManager:
                  host="132.77.68.106",
                  port=7215,
                  save_dir="/home/mxwbio/Data/recordings",
-                 file_prefix="protocol_stage"):
+                 file_prefix="Lapse"):
         self.host = host
         self.port = port
         self.save_dir = save_dir

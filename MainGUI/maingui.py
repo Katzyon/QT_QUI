@@ -41,7 +41,8 @@ import time
 import pickle
 import traceback
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog, QWidget
+#
 from PySide6.QtCore import Slot
 from PySide6.QtCore import Qt
 #from PySide6.QtGui import QImage, QPixmap, QScreen
@@ -127,6 +128,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.recorder = None  # RemoteRecordingManager instance for recording
         self.chip_number = None  # MaxOne chip number
         self.pixel_to_stage_affine = None  # Affine transformation matrix from pixel to stage coordinates for mouse optogenetic stimulation
+        self.last_raw_frame = None # last raw frame from the camera
 
         self.monitor = get_monitors()[0]
         # Arduino loaded with file: Serial_trig_randvec_light_delay.ino
@@ -179,19 +181,32 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # Access the ImageView placeholder and set data
         #self.imageView = self.ui.imageview # get the widget promoted to imageview object from the ui_form.py file
     def snap_image(self):
-        frame = self.camera.snap_image(self.core)
-        self.imageview.setImage(frame) # self.imageview is the ImageView widget from the ui_form.py file
+        self.last_raw_frame = self.camera.snap_image(self.core)
+        frame_disp = np.fliplr(self.last_raw_frame.copy())
+        # scaled = np.fliplr(scaled)
+        self.imageview.setImage(frame_disp) # self.imageview is the ImageView widget from the ui_form.py file
 
     def live_movie(self):
-        # create MovieThread object if it doesn't exist
+        # Create the movie thread once
         if not hasattr(self, 'movie_thread'):
-            self.movie_thread = MovThread_signal.MovieThread(self)
-            print("live_movie - movie_thread created")
+            self.movie_thread = MovThread_signal.MovieThread(self)   # emits RAW frames
+            self.movie_thread.frame_ready.connect(self.on_movie_frame)  # GUI slot below
             self.stop_movie.clicked.connect(self.movie_thread.stop)
+            print("live_movie - movie_thread created")
+
+        # Start only if not already running
+        if not self.movie_thread.isRunning():
+            self.movie_thread.is_running = True   # used by thread's run loop
             self.movie_thread.start()
-        self.movie_thread.is_running = True
-        self.movie_thread.start()
+
         print("movie_thread pressed")
+
+    @Slot(object)
+    def on_movie_frame(self, raw_frame):
+        # Keep authoritative RAW frame for processing/calibration
+        self.last_raw_frame = raw_frame
+        # Flip ONLY for display (horizontal)
+        self.imageview.setImage(np.fliplr(raw_frame).copy())  # copy => C-contiguous
 
     def change_color_run(self):
         self.live.setStyleSheet("background-color: red")
@@ -218,34 +233,51 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.mouse_shoot.setEnabled(True)
 
     def mouse_DMD_shoot(self): 
-        # to perform the affine transformation of image to stage coordinates use Affine_stage_image_GUI.py 
-        if not hasattr(self, 'pixel_to_stage_affine'):
-            affine_path = os.path.join(os.getcwd(), "affine_matrix.npy")
+        # User clicks on the camera image to select DMD pixels to be turned on
+        # Run Affine_stage_image_GUI.py script to perform affine calibration between image pixels and stage coordinates.
+        print("Pressed mouse_DMD_shoot clicked")
+
+        # Load affine only if not already loaded
+        if not hasattr(self, 'pixel_to_stage_affine') or self.pixel_to_stage_affine is None:
+            
+            # Get the directory of the current script (MainGUI)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+
+            # Go one level up (to QT_GUI)
+            parent_dir = os.path.dirname(script_dir)
+
+            # Build the path to affine_matrix.npy in QT_GUI
+            affine_path = os.path.join(parent_dir, "affine_matrix.npy") # affine_matrix.npy is created by Affine_stage_image_GUI.py (standalone script)
+
             if os.path.exists(affine_path):
                 try:
                     self.pixel_to_stage_affine = np.load(affine_path)
-                    print(f"Affine loaded from {affine_path}")
+                    if self.pixel_to_stage_affine.shape == (2, 3):
+                        print(f"Affine loaded from {affine_path}")
+                        print(f"Affine matrix:\n{self.pixel_to_stage_affine}")
+                    else:
+                        print(f"Loaded affine matrix has unexpected shape: {self.pixel_to_stage_affine.shape}")
+                        self.pixel_to_stage_affine = None
                 except Exception as e:
                     print(f"Error loading affine_matrix.npy: {e}")
                     self.pixel_to_stage_affine = None
             else:
                 print(f"Affine file not found at {affine_path}")
                 self.pixel_to_stage_affine = None
-        #self.show_error_message("title","error explanation")
-        # get the light_click_pixels_size from the line edit
+        else:
+            print("Affine already loaded and not None.")
+
+        # Get light parameters from GUI
         self.light_click_pixels = int(self.light_click_pixels_size.text())
         self.light_click_ms_time = int(self.light_ms_time.text())
 
+        # Load transform if needed, then take background image and launch collector
         if not hasattr(self, 'affine_transform'):
             self.load_old_affine()
-            self.frame = self.camera.snap_image(self.core) # take background image
-            self.collector = cc.ClickCollector(self)
-            self.collector.show()
-            
-        else:
-            self.frame = self.camera.snap_image(self.core) # take background image
-            self.collector = cc.ClickCollector(self) # cc is the ClickCollector class from clickcollect.py file
-            self.collector.show()
+        
+        self.frame = self.camera.snap_image(self.core) # take a fresh image for targeted optogenetic stimulation
+        self.collector = cc.ClickCollector(self)
+        self.collector.show()
 
     def show_error_message(self, title, message, icon_type=QMessageBox.Critical):
         
@@ -830,6 +862,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             self.chip_number = self.working_dir.split(os.sep)[-1]  # Use the last part of the working directory as chip number
         print("chip number was artificially set")
 
+        # connect to Maxwell server
         self.recorder = RemoteRecordingManager(
             host="132.77.68.106",
             port=7215,
@@ -872,17 +905,37 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # Update the microscope stage position in the GUI
         self.xy_stage.update_gui()
 
-        
-    def zero_stage_pos(self):
-        # set the current poisition as zero position
-        self.xy_stage.zero()
 
     def move_stage_pos(self):
     # read position from text field and Move the stage to a specified position
         
-        x = int(self.xpos.text())
-        y = int(self.ypos.text())
-        self.xy_stage.move_to(x, y)
+        user_x = float(self.xpos.text()) # The Y axis in the stage
+        user_y = float(self.ypos.text()) # The X axis in the stage
+        self.xy_stage.move_to(user_y, user_x)
+        
+    def confirm_zero_dialog(self) -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Set stage origin to (0, 0)?")
+        box.setText("You're about to set the CURRENT position as the new origin (0, 0).")
+        box.setInformativeText("This changes how all subsequent absolute moves are interpreted.\nContinue?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.No)
+
+        # Grab attention / keep on top of the app
+        box.setWindowModality(Qt.ApplicationModal)
+        box.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        QApplication.beep()
+        QApplication.alert(self, 2000)  # flash taskbar/dock briefly
+
+        return box.exec() == QMessageBox.Yes
+
+    def zero_stage_pos(self):
+        if not self.confirm_zero_dialog():
+            if hasattr(self, "statusBar") and self.statusBar():
+                self.statusBar().showMessage("Zeroing canceled.", 3000)
+            return
+        self.xy_stage.zero()  # calls your StageController.zero() underneath
        
         
 

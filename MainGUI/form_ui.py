@@ -149,11 +149,6 @@ class Ui_MainGui(object):
 
         self.verticalLayout.addWidget(self.stage_position)
 
-        self.zero_stage = QPushButton(self.layoutWidget)
-        self.zero_stage.setObjectName(u"zero_stage")
-
-        self.verticalLayout.addWidget(self.zero_stage)
-
         self.move_stage = QPushButton(self.layoutWidget)
         self.move_stage.setObjectName(u"move_stage")
 
@@ -183,6 +178,12 @@ class Ui_MainGui(object):
 
 
         self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.zero_stage = QPushButton(self.layoutWidget)
+        self.zero_stage.setObjectName(u"zero_stage")
+        self.zero_stage.setIconSize(QSize(16, 16))
+
+        self.verticalLayout.addWidget(self.zero_stage)
 
         self.light_ms_time = QLineEdit(self.centralwidget)
         self.light_ms_time.setObjectName(u"light_ms_time")
@@ -280,10 +281,6 @@ class Ui_MainGui(object):
 #endif // QT_CONFIG(whatsthis)
         self.update_stage.setText(QCoreApplication.translate("MainGui", u"Update stage position", None))
         self.stage_position.setText(QCoreApplication.translate("MainGui", u"0,0", None))
-#if QT_CONFIG(whatsthis)
-        self.zero_stage.setWhatsThis(QCoreApplication.translate("MainGui", u"<html><head/><body><p>Manually grouping detected cells by mouse click</p></body></html>", None))
-#endif // QT_CONFIG(whatsthis)
-        self.zero_stage.setText(QCoreApplication.translate("MainGui", u"Zero stage pos.", None))
 #if QT_CONFIG(tooltip)
         self.move_stage.setToolTip("")
 #endif // QT_CONFIG(tooltip)
@@ -292,9 +289,13 @@ class Ui_MainGui(object):
 #endif // QT_CONFIG(whatsthis)
         self.move_stage.setText(QCoreApplication.translate("MainGui", u"Move to coordinates", None))
         self.label_8.setText(QCoreApplication.translate("MainGui", u"X", None))
-        self.xpos.setText(QCoreApplication.translate("MainGui", u"10", None))
+        self.xpos.setText(QCoreApplication.translate("MainGui", u"0", None))
         self.label_9.setText(QCoreApplication.translate("MainGui", u"Y", None))
-        self.ypos.setText(QCoreApplication.translate("MainGui", u"10", None))
+        self.ypos.setText(QCoreApplication.translate("MainGui", u"0", None))
+#if QT_CONFIG(whatsthis)
+        self.zero_stage.setWhatsThis(QCoreApplication.translate("MainGui", u"<html><head/><body><p>Manually grouping detected cells by mouse click</p></body></html>", None))
+#endif // QT_CONFIG(whatsthis)
+        self.zero_stage.setText(QCoreApplication.translate("MainGui", u"Zero stage pos.", None))
         self.light_ms_time.setText(QCoreApplication.translate("MainGui", u"10", None))
         self.label_10.setText(QCoreApplication.translate("MainGui", u"Light \n"
 " time", None))

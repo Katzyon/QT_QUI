@@ -13,6 +13,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'M
 from stage_controller import StageController
 import Camera
 
+# Run this script to perform affine calibration between image pixels and stage coordinates.
+# Press "Start Calibration" to begin.
+# Click a prominent feature in the image.
+# The stage will move to a new random position, and you will be prompted to click the same feature again.
+# After 3 points, the affine transformation matrix will be computed and saved as "affine_matrix.npy" in the QT_GUI directory.
 
 class ATCalibration(QtWidgets.QWidget):
     def __init__(self, core, camera, stage_controller, imageview):
@@ -44,6 +49,10 @@ class ATCalibration(QtWidgets.QWidget):
             rateLimit=60,
             slot=self.pixel_clicked
         )
+        self.flip_x_display = True  # match previous orientation: fliplr
+        self.img_w = None
+        self.img_h = None
+
 
     def start_calibration(self):
         self.pixel_points.clear()
@@ -66,30 +75,61 @@ class ATCalibration(QtWidgets.QWidget):
         print("Stage moved. Click the same feature again.")
 
     def snap_and_show(self):
-        frame = self.camera.snap_image(self.core)
+        frame = self.camera.snap_image(self.core)  # RAW (no flip inside camera)
+        self.img_h, self.img_w = frame.shape[:2]
+
+        # Flip ONLY for display (horizontal), keep math in raw space
+        frame_disp = np.fliplr(frame).copy() if self.flip_x_display else frame
 
         print("frame dtype:", frame.dtype)
         print("frame min:", np.min(frame))
         print("frame max:", np.max(frame))
         print("frame shape:", frame.shape)
 
-        self.imageview.setImage(frame, autoLevels=False)
+        self.imageview.setImage(frame_disp, autoLevels=False)
         self.imageview.setLevels(0, 255)
 
         cmap = ColorMap(pos=[0.0, 1.0], color=[(0, 0, 0), (255, 255, 255)])
         lut = cmap.getLookupTable(0.0, 1.0, 256)
         self.imageview.getImageItem().setLookupTable(lut)
 
+    # def snap_and_show(self):
+    #     frame = self.camera.snap_image(self.core)
+
+    #     print("frame dtype:", frame.dtype)
+    #     print("frame min:", np.min(frame))
+    #     print("frame max:", np.max(frame))
+    #     print("frame shape:", frame.shape)
+
+    #     self.imageview.setImage(frame, autoLevels=False)
+    #     self.imageview.setLevels(0, 255)
+
+    #     cmap = ColorMap(pos=[0.0, 1.0], color=[(0, 0, 0), (255, 255, 255)])
+    #     lut = cmap.getLookupTable(0.0, 1.0, 256)
+    #     self.imageview.getImageItem().setLookupTable(lut)
+
     def pixel_clicked(self, evt):
         if not self.awaiting_click:
             return
         scene_pos = evt[0].scenePos()
         view_pos = self.imageview.view.mapSceneToView(scene_pos)
-        px, py = view_pos.x(), view_pos.y()
+        px_disp, py_disp = view_pos.x(), view_pos.y()
+
+        # Convert display coords to RAW camera coords
+        if self.flip_x_display and self.img_w is not None:
+            px_raw = self.img_w - 1 - px_disp
+        else:
+            px_raw = px_disp
+        py_raw = py_disp
+
         sx, sy = self.stage.get_position()
-        self.pixel_points.append((px, py))
+
+        # Use RAW pixel coords for affine
+        self.pixel_points.append((px_raw, py_raw))
         self.stage_points.append((sx, sy))
-        print(f"Point {len(self.pixel_points)}: Pixel=({px:.2f},{py:.2f}) ↔ Stage=({sx:.2f},{sy:.2f})")
+        print(f"Point {len(self.pixel_points)}: "
+            f"Display=({px_disp:.2f},{py_disp:.2f}) → Raw=({px_raw:.2f},{py_raw:.2f}) "
+            f"↔ Stage=({sx:.2f},{sy:.2f})")
 
         self.awaiting_click = False
 
@@ -99,6 +139,27 @@ class ATCalibration(QtWidgets.QWidget):
             print("Collected 3 points. Computing affine matrix and saving transform...")
             self.compute_affine()
             self.save_transform(autosave=True)
+
+
+    # def pixel_clicked(self, evt):
+    #     if not self.awaiting_click:
+    #         return
+    #     scene_pos = evt[0].scenePos()
+    #     view_pos = self.imageview.view.mapSceneToView(scene_pos)
+    #     px, py = view_pos.x(), view_pos.y()
+    #     sx, sy = self.stage.get_position()
+    #     self.pixel_points.append((px, py))
+    #     self.stage_points.append((sx, sy))
+    #     print(f"Point {len(self.pixel_points)}: Pixel=({px:.2f},{py:.2f}) ↔ Stage=({sx:.2f},{sy:.2f})")
+
+    #     self.awaiting_click = False
+
+    #     if len(self.pixel_points) < 3:
+    #         QtCore.QTimer.singleShot(100, self.move_to_next_position)
+    #     else:
+    #         print("Collected 3 points. Computing affine matrix and saving transform...")
+    #         self.compute_affine()
+    #         self.save_transform(autosave=True)
 
 
     def compute_affine(self):
@@ -116,8 +177,15 @@ class ATCalibration(QtWidgets.QWidget):
             return
 
         if autosave:
-            filename = os.path.join(os.getcwd(), "affine_matrix.npy")
+            # Get the directory of the current script (MainGUI)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # Go one level up (to QT_GUI)
+            parent_dir = os.path.dirname(script_dir)
+            # Build the path to affine_matrix.npy in QT_GUI
+            filename = os.path.join(parent_dir, "affine_matrix.npy")
+
             np.save(filename, self.affine_matrix)
+
             print(f"Affine matrix auto-saved to {filename}")
         else:
             filename, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -127,13 +195,28 @@ class ATCalibration(QtWidgets.QWidget):
                 np.save(filename, self.affine_matrix)
                 print(f"Affine matrix saved to {filename}")
 
-
     def apply_affine(self, x_pix, y_pix):
         if self.affine_matrix is None:
             return None
-        pt = np.array([x_pix, y_pix, 1], dtype=np.float32)
+
+        # Convert display coords to RAW before applying the matrix
+        if self.flip_x_display and self.img_w is not None:
+            x_raw = self.img_w - 1 - x_pix
+        else:
+            x_raw = x_pix
+        y_raw = y_pix
+
+        pt = np.array([x_raw, y_raw, 1], dtype=np.float32)
         stage_coords = self.affine_matrix @ pt
         return stage_coords[0], stage_coords[1]
+
+
+    # def apply_affine(self, x_pix, y_pix):
+    #     if self.affine_matrix is None:
+    #         return None
+    #     pt = np.array([x_pix, y_pix, 1], dtype=np.float32)
+    #     stage_coords = self.affine_matrix @ pt
+    #     return stage_coords[0], stage_coords[1]
 
 
 class MainWindow(QtWidgets.QMainWindow):

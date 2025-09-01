@@ -496,16 +496,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="zero_stage">
-        <property name="whatsThis">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually grouping detected cells by mouse click&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="text">
-         <string>Zero stage pos.</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="QPushButton" name="move_stage">
         <property name="toolTip">
          <string extracomment="press the button to update stage position"/>
@@ -530,7 +520,7 @@
         <item>
          <widget class="QLineEdit" name="xpos">
           <property name="text">
-           <string>10</string>
+           <string>0</string>
           </property>
          </widget>
         </item>
@@ -544,11 +534,27 @@
         <item>
          <widget class="QLineEdit" name="ypos">
           <property name="text">
-           <string>10</string>
+           <string>0</string>
           </property>
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="zero_stage">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually grouping detected cells by mouse click&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Zero stage pos.</string>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>16</width>
+          <height>16</height>
+         </size>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

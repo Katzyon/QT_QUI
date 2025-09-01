@@ -6,7 +6,7 @@ HOST = "132.77.68.106"
 PORT = 7215
 
 save_dir = "/home/mxwbio/Data/recordings"
-file_name = "26880_6DIV"
+file_name = "26995_13DIV"
 
 with api_context(host=HOST, port=PORT) as api:
     # Redefine methods to use the same persistent connection

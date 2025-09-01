@@ -36,44 +36,107 @@ class CellPicker(QObject): #
         super(CellPicker, self).__init__(parent)
         assert len(image.shape) == 2, "Image should be a 2D array."
 
+        self.flip_x_display = True              # <<< match your other viewers (fliplr)
+        self.H, self.W = image.shape            # <<< keep dimensions for mapping
+
         self.original_image = image
         self.image_scaled = ((image - image.min()) * (255 / (image.max() - image.min()))).astype(np.uint8)
         self.image_rgb = np.stack((self.image_scaled,)*3, axis=-1)
+
         self.selected_cells = set()
-        self.groups = []  # Updated to store groups as objects
+        self.groups = []
         self.current_group_id = 0
 
-        #self.fig, self.ax = plt.subplots()
         self.fig = Figure()
         self.ax = self.fig.add_subplot(111)
         self.button_ax = self.fig.add_axes([0.8, 0.05, 0.1, 0.075])
-        
+
         self.button = Button(self.button_ax, 'Group Cells')
         self.button.on_clicked(self.group_cells)
         self.canvas = FigureCanvas(self.fig)
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self)
-        self.ax.imshow(self.image_rgb)
-        #plt.show()
+
+        # draw FLIPPED view for the user; keep data in RAW orientation
+        self.im = self.ax.imshow(self._to_display(self.image_rgb), interpolation='nearest')
         
 
+    # def __init__(self, image, parent=None):
+    #     super(CellPicker, self).__init__(parent)
+    #     assert len(image.shape) == 2, "Image should be a 2D array."
 
-    # This method is called whenever the user clicks on the image
+    #     self.original_image = image
+    #     self.image_scaled = ((image - image.min()) * (255 / (image.max() - image.min()))).astype(np.uint8)
+    #     self.image_rgb = np.stack((self.image_scaled,)*3, axis=-1)
+    #     self.selected_cells = set()
+    #     self.groups = []  # Updated to store groups as objects
+    #     self.current_group_id = 0
+
+    #     #self.fig, self.ax = plt.subplots()
+    #     self.fig = Figure()
+    #     self.ax = self.fig.add_subplot(111)
+    #     self.button_ax = self.fig.add_axes([0.8, 0.05, 0.1, 0.075])
+        
+    #     self.button = Button(self.button_ax, 'Group Cells')
+    #     self.button.on_clicked(self.group_cells)
+    #     self.canvas = FigureCanvas(self.fig)
+    #     self.cid = self.fig.canvas.mpl_connect('button_press_event', self)
+    #     self.ax.imshow(self.image_rgb)
+    #     #plt.show()
+        
+    def _to_display(self, arr):
+        # flip horizontally ONLY for display
+        return np.fliplr(arr) if self.flip_x_display else arr
+
+    def _disp_to_raw(self, x_disp, y_disp):
+        # map display coords back to RAW (invert X only)
+        x = int(round(x_disp)); y = int(round(y_disp))
+        if self.flip_x_display:
+            x = self.W - 1 - x
+        return x, y
+
     def __call__(self, event):
-        if event.inaxes is not None:
-            row, col = int(event.ydata), int(event.xdata)
-            cell_value = self.original_image[row, col] # cell value is the index of the cell in the image
+        if event.inaxes is None or event.xdata is None or event.ydata is None:
+            return
 
-            if cell_value == 0 or any(cell_value in group['cells'] for group in self.groups):
-                return
+        # display coords from matplotlib → raw coords for data
+        x_raw, y_raw = self._disp_to_raw(event.xdata, event.ydata)
 
-            self.selected_cells.add(cell_value)
-            unique_color = np.random.randint(0, 256, 3)
-            mask = self.original_image == cell_value
-            self.image_rgb[mask] = unique_color
+        # bounds check
+        if not (0 <= x_raw < self.W and 0 <= y_raw < self.H):
+            return
 
-            self.ax.clear()
-            self.ax.imshow(self.image_rgb)
-            self.fig.canvas.draw()
+        # look up label in RAW mask
+        cell_value = self.original_image[y_raw, x_raw]
+        if cell_value == 0 or any(cell_value in group['cells'] for group in self.groups):
+            return
+
+        self.selected_cells.add(cell_value)
+        unique_color = np.random.randint(0, 256, 3)
+        mask = (self.original_image == cell_value)   # mask in RAW
+        self.image_rgb[mask] = unique_color          # recolor RAW data
+
+        # redraw FLIPPED view
+        self.im.set_data(self._to_display(self.image_rgb))
+        self.fig.canvas.draw_idle()
+
+
+    # # This method is called whenever the user clicks on the image
+    # def __call__(self, event):
+    #     if event.inaxes is not None:
+    #         row, col = int(event.ydata), int(event.xdata)
+    #         cell_value = self.original_image[row, col] # cell value is the index of the cell in the image
+
+    #         if cell_value == 0 or any(cell_value in group['cells'] for group in self.groups):
+    #             return
+
+    #         self.selected_cells.add(cell_value)
+    #         unique_color = np.random.randint(0, 256, 3)
+    #         mask = self.original_image == cell_value
+    #         self.image_rgb[mask] = unique_color
+
+    #         self.ax.clear()
+    #         self.ax.imshow(self.image_rgb)
+    #         self.fig.canvas.draw()
 
     def group_cells(self, event):
         group_color = np.random.randint(0, 256, 3)
@@ -103,7 +166,10 @@ class CellPicker(QObject): #
         self.selected_cells.clear()
 
         self.ax.clear()
-        self.ax.imshow(self.image_rgb)
-        self.fig.canvas.draw()
+        self.im.set_data(self._to_display(self.image_rgb))
+        self.fig.canvas.draw_idle()
+
+        # self.ax.imshow(self.image_rgb)
+        # self.fig.canvas.draw()
 
 

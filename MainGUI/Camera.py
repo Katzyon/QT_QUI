@@ -57,15 +57,18 @@ class getImage:  # called by init_window.py
 
             pixels = np.clip(pixels, 0, 255).astype(np.uint8)
 
+            # Scale based on percentiles to reduce influence of outliers
+            low = np.percentile(pixels, 1)     # Lower 1%
+            high = np.percentile(pixels, 99)   # Upper 1%
 
-            # Clip to remove outliers (optional but recommended)
-            # low = np.percentile(pixels, 1)
-            # high = np.percentile(pixels, 99.9)
-            # pixels = np.clip(pixels, low, high)
-            # pixels = ((pixels - low) / (high - low) * 255).astype(np.uint8)
-            # qImg = QImage(pixels.data, pixels.shape[1], pixels.shape[0], QImage.Format_Grayscale8)
-            # pixmap = QPixmap.fromImage(qImg) # Convert the QImage to a QPixmap
-            return pixels
+            # Avoid division by zero
+            if high == low:
+                scaled = np.zeros_like(pixels, dtype=np.uint8)
+            else:
+                scaled = np.clip((pixels - low) / (high - low) * 255, 0, 255).astype(np.uint8)
+
+            
+            return scaled
             
 
     def get_device_properties(self, core):

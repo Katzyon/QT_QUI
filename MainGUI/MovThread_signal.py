@@ -13,17 +13,17 @@ class MovieThread(QThread):
     def __init__(self, MainGUI):
         super().__init__()
         self.MainGUI = MainGUI
-        self.is_running = True
-        self.frame_ready.connect(self.update_imageview)  # Connect the signal to the slot   
+        self.is_running = False
+
 
     def run(self):
         #self.camera.acquire_movie(8)
         #print("MovieThread run")
-        
+        self.is_running = True
         while self.is_running:
             frame = self.MainGUI.camera.snap_image(self.MainGUI.core)
             self.frame_ready.emit(frame)  # Emit the signal with the new frame
-            self.msleep(100)  # Sleep for 100 ms (equivalent to 0.1 seconds)
+            self.msleep(80)  # Sleep for 80 ms (equivalent to 0.08 seconds)
 
     @Slot(object)
     def update_imageview(self, frame):

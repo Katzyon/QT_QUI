@@ -30,7 +30,7 @@ class ProtocolRunner(QThread):
         self.currentStage = 0
         #self.arduino = gui.arduino # arduino object to control the polygon, light source and MaxOne digipins
         self.arduino_comm = gui.arduino_comm # arduino communication object to send messages to the Arduino
-        self.recorder = gui.recorder  # RemoteRecordingManager instance for recording - currently manually initialized in the main GUI
+        self.recorder = gui.recorder  # RemoteRecordingManager instance for recording - currently manually initialized in the main GUI (maxwell server)
 
         # print(dir(self.stages))
 

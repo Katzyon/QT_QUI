@@ -150,9 +150,6 @@ def create_order_sequence(stage):
         print("group image shape:", group_sum.shape)
         
 
-
-
-
 def create_decay_probabilities(groupsNumber, group_probability_ratio):
     
     

@@ -8,6 +8,8 @@ import time
 import Display_image as di
 import os
 
+# clickcollect.py - collect mouse clicks on the camera image, convert to stage coordinates, create a mask, display it on the DMD, snap a picture and display it
+
 class ImageLabel(QLabel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -79,6 +81,7 @@ class ClickCollector(QWidget):
         self.setWindowTitle('Click Collector')
         self.move(50, 50)
         self.setMouseTracking(True)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)   # <<< ensure destruction on close
 
     def pixel_to_micron(self, x_disp, y_disp): ## updated
         # if hasattr(self, 'pixel_to_stage_affine') and self.pixel_to_stage_affine is not None:
@@ -110,34 +113,61 @@ class ClickCollector(QWidget):
         # 2) Show display marker
         self.panel.set_current_point((x_disp, y_disp))
 
-        # 3) Map display→RAW (X inversion only, per your updated affine)
+        # 3) Map display → RAW (already fixed for k=1)
         x_raw, y_raw = self.display_to_raw(x_disp, y_disp)
 
-        # 4) Micron readout (uses display coords; converts inside)
+        # 4) Micron readout (converts inside)
         x_um, y_um = self.pixel_to_micron(x_disp, y_disp)
-        print(f"Disp=({x_disp:.1f},{y_disp:.1f}) → Raw=({x_raw},{y_raw}) → Micron=({x_um},{y_um})"
-              if x_um is not None else
-              f"Disp=({x_disp:.1f},{y_disp:.1f}) → Raw=({x_raw},{y_raw}) → Micron=[NA]")
+        print(f"Disp=({x_disp:.1f},{y_disp:.1f}) → Raw=({x_raw},{y_raw}) → "
+            f"Micron=({x_um},{y_um})" if x_um is not None else
+            f"Disp=({x_disp:.1f},{y_disp:.1f}) → Raw=({x_raw},{y_raw}) → Micron=[NA]")
 
-        # 5) Build RAW camera mask, warp to SLM
+        # 5) Build RAW camera mask, warp to SLM space
         mask = self.mouse_click_image(x_raw, y_raw)
         slm_img = cv2.warpAffine(mask, self.gui.affine_transform, (slm_w, slm_h))
+        slm_img = np.ascontiguousarray(slm_img.astype(np.uint8, copy=False))  # hygiene
 
-        # 6) Push to SLM (non-blocking; see §2 below)
-        core.set_slm_image(dmd, slm_img)
-        core.display_slm_image(dmd)
+        # 6–8) Atomically: show pattern → snap → clear (under lock if available)
+        cam = self._stim_and_snap(slm_img)
 
-        # 7) Optional capture (see §2 below before leaving as-is)
-        core.snap_image()
-        t = core.get_tagged_image()
-        cam = np.reshape(t.pix, (t.tags['Height'], t.tags['Width']))
-
-        # 8) Clear SLM with correct shape order (H, W)
-        core.set_slm_image(dmd, np.zeros((slm_h, slm_w), dtype=np.uint8))
-        core.display_slm_image(dmd)
-
-        # 9) Display response image (this can block; see §3)
+        # 9) Display response image
         di.display_image(cam, "cam_image")
+
+    # try to handle Polygon connectivity lost due to image shape and micromanager calls.
+    def _stim_and_snap(self, slm_img):
+        # If MainGUI exposes a mutex, use it
+        has_lock = hasattr(self.gui, "mm_lock") and hasattr(self.gui, "mm_unlock")
+        if has_lock:
+            self.gui.mm_lock()
+        try:
+            core = self.gui.core
+            dmd  = core.get_slm_device()
+
+            # Ensure exact (H, W) and contiguous uint8
+            H = core.get_slm_height(dmd); W = core.get_slm_width(dmd)
+            if slm_img.shape != (H, W):
+                slm_img = cv2.resize(slm_img, (W, H), interpolation=cv2.INTER_NEAREST)
+            slm_img = np.clip(slm_img, 0, 255).astype(np.uint8, copy=False)
+            slm_img = np.ascontiguousarray(slm_img)
+
+            # 1) Display pattern
+            core.set_slm_image(dmd, slm_img)
+            core.display_slm_image(dmd)
+
+            # 2) Snap while pattern is shown
+            core.snap_image()
+            t = core.get_tagged_image()
+            cam = np.reshape(t.pix, (t.tags['Height'], t.tags['Width']))
+
+            # 3) Clear SLM
+            blank = np.zeros((H, W), dtype=np.uint8)
+            core.set_slm_image(dmd, blank)
+            core.display_slm_image(dmd)
+
+            return cam
+        finally:
+            if has_lock:
+                self.gui.mm_unlock()
 
 
 
@@ -158,14 +188,26 @@ class ClickCollector(QWidget):
     
 
     def closeEvent(self, event):
-        # 1) Clear any SLM/polygon pattern
+        # Clear any SLM/polygon pattern
         self.clear_slm()
 
-        # 2) Clear UI overlay(s)
-        # if you draw a point:
+        # Remove UI overlays / references
         self.panel.set_current_point(None)
 
+        # Sever strong references that could keep this object alive
+        try:
+            self.panel.setParent(None)
+            self.panel.deleteLater()
+        except Exception:
+            pass
 
+        # If MainGUI keeps a handle to this widget, null it out
+        if getattr(self, "gui", None) is not None and getattr(self.gui, "collector", None) is self:
+            self.gui.collector = None
+
+        # IMPORTANT: let Qt actually close/destroy the widget
+        super().closeEvent(event)
+        self.deleteLater()
 
     def camImage_to_QImage(self, frame):
         # Fix tilt-left: rotate 90° CW, then keep your horizontal flip convention

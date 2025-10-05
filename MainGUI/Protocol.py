@@ -7,7 +7,7 @@ from math import ceil
 
 # import matplotlib
 # matplotlib.use('Agg')  # Use the non-GUI backend for matplotlib
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 # import os
 
 class Stage: # called by protocolSet.py
@@ -34,8 +34,8 @@ class Stage: # called by protocolSet.py
         self.sequences_images = [] # list of images to be displayed in each sequence
         self.inter_mask_interval = float() # ms time between each mask in a sequence
         self.sequence_repeats = int()
-        self.stim_time = int() # stimulation time for running the protocol in minutes
-        self.cycle_time = float() # 
+        self.stim_time = int() # stimulation time for running the protocol in minutes - the whole duration of the stage
+        self.cycle_time = float() # The 
         self.image_repeats = int()
         self.manual_groups = [] # list of manually selected groups
         self.is_manual = False # get checkbox selection of isManualSequence
@@ -60,11 +60,12 @@ class Stage: # called by protocolSet.py
         self.group_distribution_number = 50 # Average number of group presentations in the sequence 
         self.group_probability_ratio =  1.5 # probability ratio between groups 
         self.group_divider = 2 # number of groups to divide the groupSize into - for the probability stimulation to break the group into smaller groups so the stimulation do not synchronize all cells.
-        self.help_counter = 0 # counter for to plot the DMDArray at the first run of the protocol
+        self.help_counter = 0 # counter to plot the DMDArray at the first run of the protocol
         self.start_run_time = None # time of the start of the stage run
         self.square_size = 10
         self.square_groups = 1 # number of square simultaneuosly presented as a group
         self.recording = False # flag to indicate if the stage is being recorded
+        
         
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -81,6 +82,14 @@ class Stage: # called by protocolSet.py
         
 
     def calc_interMaskInterval(self):
+        
+        if self.stim_type == "Spontaneous" or len(getattr(self, "sequence", [])) == 0:
+            self.inter_mask_interval = 0
+            self.cycle_time = 0
+            self.sequence_repeats = 1
+            print("Spontaneous timing: wait only. stim_time (min):", getattr(self, "stim_time", None),
+                "| repeats:", self.sequence_repeats)
+            return
         
         #self.inter_mask_interval = (self.groups_period / self.groups_number) - self.on_time # ms
         self.inter_mask_interval = self.groups_period - self.on_time
@@ -108,16 +117,15 @@ class Stage: # called by protocolSet.py
 
 
 
-    def create_sequence(self): # replaces  def createSequence(stage) in protocolSet.py
+    def create_sequence_pointer(self): # called by protocolSet.py
+        """Create a sequence of groups to be stimulated according to the selected stimulation type"""
 
-        # print self attributes
-        
-        # Check if the total number of required group members exceeds the numberCells
-        if self.groups_number * self.group_size > self.number_cells:
-            # print the number of cells and groups
-            print(f"Number of cells: {self.number_cells}, Number of groups: {self.groups_number}, Group size: {self.group_size}")   
-            raise ValueError("Not enough cells to create the required number of groups without repeats")
-            
+
+        if getattr(self, "stim_type", None) == "Spontaneous":
+            print("Spontaneous: skipping output group creation and stimulation setup")
+            self.output_group = []
+            cs.create_spontaneous_sequence(self)  # sets sequence=[] and groups_images=[]
+            return
 
         # check if self.output_group is empty
         if not self.output_group:
@@ -143,9 +151,8 @@ class Stage: # called by protocolSet.py
         print("stimulation type:", self.stim_type) 
         print("Protocol output group", self.output_group)
         if self.stim_type == 'Random':
-            # create_sequence
-            
             cs.create_random_sequence(self) # create_sequence in the Potocol object stage (create_sequence.py)
+
         elif self.stim_type == 'Order': # create repeated stimulation according to the order of the groups
             cs.create_order_sequence(self)
 
@@ -153,6 +160,8 @@ class Stage: # called by protocolSet.py
             cs.create_test_sequence(self)
         elif self.stim_type == 'Squares':
             cs.create_squares_sequence(self)
+        elif self.stim_type == 'Spontaneous': # No stimulation - just waiting time
+            pass
         else:
             print(f"Error: Unsupported stimulation type '{self.stim_type}'. Please use 'Random' or 'Sequential'.")
 
@@ -169,33 +178,7 @@ class Stage: # called by protocolSet.py
             ind_image = self.groups_images[idx]  # get the image of the group created by create_sequence.py
             # ERROR? Order stimulation? Check the is_manual checkbox in the protocol design 
             self.DMDArray.add(ind_image.ravel())  # add the image to the Java array
+            ind_image = []
 
         # Debugging output
         print("image indices", indices) 
-
-        # if self.help_counter == 0:  # plot the DMDArray at the first run of the protocol
-        #     self.help_counter += 1
-
-        #     # Assuming indices and self.groups_images are defined
-        #     fig, axes = plt.subplots(nrows=3, ncols=6, figsize=(18, 10))  # 3 rows, 6 columns
-        #     axes = axes.flatten()  # Flatten the 2D axes array for easier indexing
-
-        #     for i, idx in enumerate(indices):
-        #         image = self.groups_images[idx]
-        #         axes[i].imshow(image, cmap='gray')
-        #         axes[i].set_title(f"Group {idx}")
-        #         axes[i].axis('off')  # Optional: turn off axes for cleaner presentation
-
-        #     # Hide any unused subplots
-        #     for j in range(len(indices), len(axes)):
-        #         axes[j].axis('off')
-
-        #     plt.tight_layout()
-
-
-        #     # Save the plot in the Protocols folder
-        #     protocols_dir = os.path.join(os.getcwd(), "Protocols")  # Path to Protocols folder
-        #     os.makedirs(protocols_dir, exist_ok=True)  # Create the folder if it doesn't exist
-        #     output_path = os.path.join(protocols_dir, "DMDArray_plot.png")
-        #     plt.savefig(output_path)
-        #     print(f"Plot saved to {output_path}")

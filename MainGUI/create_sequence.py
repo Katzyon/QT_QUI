@@ -5,11 +5,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import os
-
+ 
 
 def create_random_sequence(stage): # called by protocolSet.py via Protocol object to create the sequence of images to be displayed on the DMD
     # get Protocol object and randomly group the indices according to its parameters:
     # create probability distribution for the groups 
+
+     # Check if the total number of required group members exceeds the numberCells
+    if stage.groups_number * stage.group_size > stage.number_cells:
+        # print the number of cells and groups
+        print(f"Number of cells: {stage.number_cells}, Number of groups: {stage.groups_number}, Group size: {stage.group_size}")   
+        raise ValueError("Not enough cells to create the required number of groups without repeats")
+            
 
 
     all_cells = stage.input_cells.copy() # copy the list of all cells
@@ -54,8 +61,12 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
             # Assign probability for each smaller group (SG) such that its probability + its major group (MG) P would be equal to the highest probability group (HG)
             # p(HG) = p(MG1) + p(SG1) = p(MG2) + p(SG2)
             # p(MG1) > p(MG2) and p(SG1) < p(SG2) since the p for the first group is the highest and decays by stage.group_probability_ratio for the others
-            smaller_group_probability = (highest_group_prob - stage.group_probabilities[i]) # / stage.group_divider
-            smaller_group_probabilities.append(smaller_group_probability)
+            try:
+                smaller_group_probability = (highest_group_prob - stage.group_probabilities[i]) # / stage.group_divider
+                smaller_group_probabilities.append(smaller_group_probability)
+            except (IndexError, AttributeError, TypeError, KeyError) as e:
+                print(f"Wrong Stage type selected: {e}")
+                smaller_group_probabilities.append(None)  # or another fallback
 
 
 
@@ -132,9 +143,10 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
 def create_order_sequence(stage):
     # create a sequence of images according to the order of the groups (same probability for all groups)
     # repeat the basic sequence many times
-   
-    print("create_order_sequence called")   
-    n = stage.group_distribution_number* stage.groups_number # number of repetitions of the sequence
+
+    print("create_order_sequence called")
+    print("number of groups:", stage.groups_number)
+    n = stage.group_distribution_number * stage.groups_number  # number of repetitions of the sequence
     stage.sequence = np.tile(np.arange(stage.groups_number), n).tolist()
     
     print("manual groups:", stage.groups)
@@ -225,3 +237,9 @@ def create_squares_sequence(stage):
     print("Size of first image:", stage.groups_images[0].shape)
     # create a sequence of indices for the images
     stage.sequence = list(range(len(stage.groups_images)))
+
+def create_spontaneous_sequence(stage):
+    # Create a spontaneous sequence with no stimulation - just waiting time
+    print("create_spontaneous_sequence called")
+    stage.sequence = []  # No images to display
+    stage.groups_images = []  # No images to display

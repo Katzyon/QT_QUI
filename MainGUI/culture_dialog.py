@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QLabel, QVBoxLayout, QFormLayout, QFileDialog, QDateEdit
+from PySide6.QtCore import QDate
 from datetime import datetime
 
 class CultureInitDialog(QDialog):
@@ -17,7 +18,8 @@ class CultureInitDialog(QDialog):
         self.age_input = QLineEdit("E18")
         self.plating_date_input = QDateEdit()
         self.plating_date_input.setCalendarPopup(True)
-        self.plating_date_input.setDateTime(datetime(2025, 3, 12))
+        #self.plating_date_input.setDateTime(datetime(2025, 3, 12))
+        self.plating_date_input.setDate(QDate.currentDate())
         self.strain_input = QLineEdit("c57BL/6")
 
         # Directory chooser

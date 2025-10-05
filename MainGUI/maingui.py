@@ -43,8 +43,7 @@ import traceback
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog, QWidget
 #
-from PySide6.QtCore import Slot
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 #from PySide6.QtGui import QImage, QPixmap, QScreen
 # import QScreen from PySide6.QtGui to get the screen resolution
 
@@ -276,6 +275,21 @@ class MainGui(QMainWindow, Ui_MainGui): #
             self.load_old_affine()
         
         self.frame = self.camera.snap_image(self.core) # take a fresh image for targeted optogenetic stimulation
+        
+        if getattr(self, "collector", None) and self.collector is not None:
+            if self.collector.isVisible():
+                # bring it to front instead of creating another
+                self.collector.raise_()
+                self.collector.activateWindow()
+                return
+            else:
+                # ensure old instance is truly gone
+                try:
+                    self.collector.close()
+                except Exception:
+                    pass
+                self.collector = None
+
         self.collector = cc.ClickCollector(self)
         self.collector.show()
 
@@ -529,27 +543,18 @@ class MainGui(QMainWindow, Ui_MainGui): #
         """Handle the groups_ready signal from the cell_picker_widg"""
         self.manualGroups = []  # Initialize manualGroups
         print("maingui handle_groups_ready: ", groups)
-        
+
         for group in groups:
-            self.manualGroups.append(group['cells'])
+            cells = group.get('cells', [])
+            if cells:  # only append when non-empty
+                self.manualGroups.append(cells)
+        
+        # for group in groups:
+        #     self.manualGroups.append(group['cells'])
         print("manualGroups:", self.manualGroups)
-        # create self.manual_sequence which includes the list of the manualGroups and the remaining_cells.
-        # the remaining_cells are the cells that were not selected manually
-        # print("type of self.culture.unique_cells:", type(self.culture.unique_cells))
-        # print("type of self.unique_cells:", type(self.unique_cells))
+
         
-        
-        # #remaining_cells = self.unique_cells.tolist() # convert numpy array to list
-        # remaining_cells = list(range(len(self.protocol.images)))
-        # for group in self.manualGroups:
-        #     for cell in group:
-        #         remaining_cells.remove(cell)
-        
-        # self.remainingManualCells = [[item] for item in remaining_cells] # list the remaining cells separately as groups of 1 cell each
-        # self.manual_sequence = self.manualGroups + self.remainingManualCells # NOT IS USE! create the manual sequence a list of the manual groups and the remaining cells as groups of ones.
-        # # print("manual_sequence:", self.manual_sequence)
-        
-        # # update isManual
+
         
 
 
@@ -646,35 +651,95 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
     
 
-    def run_protocol(self):
-        """ Following button press run the protocol """
+    # def run_protocol(self):
+    #     """ Following button press run the protocol """
         
         
-        self.stopProtocol.setVisible(True) # make the stopProtocol button visible
-        # check if a protocol is loaded
-        if self.stages_table.empty:
-            print("No protocol loaded")
-            self.show_error_message("No protocol loaded","Load protocol from file")
-        else:
-            print("Protocol set")
-            print(self.stages_table)
+    #     self.stopProtocol.setVisible(True) # make the stopProtocol button visible
+    #     # check if a protocol is loaded
+    #     if self.stages_table.empty:
+    #         print("No protocol loaded")
+    #         self.show_error_message("No protocol loaded","Load protocol from file")
+    #     else:
+    #         print("Protocol set")
+    #         print(self.stages_table)
 
             
-            # run the protocol
-            self.protocol_runner = ProtocolRunner(self)
-            self.protocol_runner.start() # run the protocol
-            #self.protocol_runner.protocolFinishSignal.connect(self.cleanupProtocolRunner)
-            self.protocol_runner.finished.connect(self.cleanupProtocolRunner)
+    #         # run the protocol
+    #         self.protocol_runner = ProtocolRunner(self)
+    #         self.protocol_runner.start() # run the protocol
+    #         #self.protocol_runner.protocolFinishSignal.connect(self.cleanupProtocolRunner)
+    #         self.protocol_runner.finished.connect(self.cleanupProtocolRunner)
+
+    def run_protocol(self):
+        """Following button press run the protocol"""
+
+        self.stopProtocol.setVisible(True)  # show Stop button
+
+        # Validate protocol presence
+        if self.stages_table.empty:
+            print("No protocol loaded")
+            self.show_error_message("No protocol loaded", "Load protocol from file")
+            return
+
+        print("Protocol set")
+        print(self.stages_table)
+
+        # Create a fresh runner
+        self.protocol_runner = ProtocolRunner(gui=self, parent=self)
+
+        # Connect finished → cleanup
+        self.protocol_runner.finished.connect(self.cleanupProtocolRunner)
+
+        # Connect preview signal → GUI slot (defined below)
+        self.protocol_runner.plot_dmd.connect(self.show_dmd_grid)
+
+        # Ensure Stop button controls THIS runner only (avoid duplicate connections)
+        try:
+            self.stopProtocol.clicked.disconnect()
+        except TypeError:
+            # No previous connections; safe to ignore
+            pass
+        self.stopProtocol.clicked.connect(self.protocol_runner.stop)
+
+        # Go
+        self.protocol_runner.start()
+
         
-    def cleanupProtocolRunner(self):
+    # def cleanupProtocolRunner(self):
         
-        self.protocol_runner.deleteLater()
+    #     self.protocol_runner.deleteLater()
         
 
-        print("Protocol runner deleted")
-        self.stopProtocol.setVisible(False)
-        # !!! save and update the culture object with the new protocol
+    #     print("Protocol runner deleted")
+    #     self.stopProtocol.setVisible(False)
+    #     # !!! save and update the culture object with the new protocol
         
+
+    def cleanupProtocolRunner(self):
+        # 1) Detach Stop button from any old runner to avoid duplicate connections
+        try:
+            self.stopProtocol.clicked.disconnect()
+        except TypeError:
+            pass  # no previous connection
+
+        # 2) Ensure the worker is stopped and freed
+        runner = getattr(self, "protocol_runner", None)
+        if runner is not None:
+            try:
+                if runner.isRunning():           # Should be False when 'finished' fires, but be safe
+                    runner.stop()
+                    runner.wait(2000)           # grace period (ms)
+            except Exception as e:
+                print(f"Warning: error while stopping runner: {e}")
+            runner.deleteLater()
+            self.protocol_runner = None
+
+        print("Protocol runner deleted")
+
+        # 3) UI reset
+        self.stopProtocol.setVisible(False)
+
 
     def stop_protocol(self):
         self.protocol_runner.stop()
@@ -753,7 +818,39 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         print(f"Created new protocol directory: {new_folder_path}")
 
+    @Slot(list, list)
+    def show_dmd_grid(self, images, titles):
+        """
+        images: List[np.ndarray] shaped (H, W), grayscale uint8
+        titles: List[str]
+        """
+        if not images:
+            return
 
+        # Import here to keep Matplotlib out of worker thread/import cycle
+        import matplotlib.pyplot as plt
+
+        n = len(images)
+        ncols = min(6, n)
+        nrows = (n + ncols - 1) // ncols
+
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(3*ncols, 3*nrows))
+        # axes can be a single Axes when n == 1
+        if hasattr(axes, "flatten"):
+            axes = axes.flatten()
+        else:
+            axes = [axes]
+
+        for ax, img, title in zip(axes, images, titles):
+            ax.imshow(img, cmap='gray', interpolation='nearest')
+            ax.set_title(title)
+            ax.axis('off')
+
+        for ax in axes[len(images):]:
+            ax.axis('off')
+
+        fig.tight_layout()
+        plt.show()  # or draw to an embedded canvas if you have one    
 
 
     def setup_directories(self):

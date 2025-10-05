@@ -20,6 +20,7 @@ class ProtocolRunner(QThread):
     
     #signalOutData = Signal(object) # signal to send the dataframe to the main window
     #protocolFinishSignal = Signal()
+    plot_dmd = Signal(list, list) # signal to plot the DMD images and the sequence numbers - list of images and list of sequence numbers
 
     def __init__(self, gui, parent=None):
         super().__init__(parent)
@@ -37,10 +38,9 @@ class ProtocolRunner(QThread):
         # get the core to control the DMD
         self.core = gui.core
         #self.bridge = self.core._get_bridge()
+        self.plot = False # whether to plot the DMD images at the start of each stage for validation
 
-        #self.DMDArray = gui.prot.DMDArray # list of Java arrayLists, each arrayList is a sequence of (vectorizred) images to be displayed on the DMD
-        #self.DMDArray = DMDArray if DMDArray is not None else gui.prot.DMDArray
-        # print the shape of DMDArray
+
 
         # The number of groups in the protocol - single cells not set into groups are considered as a group (e.g. in 15 cells with 2 groups of 6 cells and 3 single cells, we'll have 5 groups)
         # "image len", self.DMDArray[0][0].size()
@@ -77,14 +77,10 @@ class ProtocolRunner(QThread):
     # Automatically called when running QThread  
     def run(self):
 
-        self.times = 0
-
-        # add one to the protocol index
-        
+        self.times = 0  
         self.culture.protocols_number += 1 # update the number of protocols in the culture object
         print("protocols number:", self.culture.protocols_number)
         # add the current protocol to the .protocols list in the culture object
-        
         
         # print the number of stages in the protocol
         print("Number of stages in the protocol:", len(self.stages))
@@ -110,10 +106,19 @@ class ProtocolRunner(QThread):
 
                 sequence = stage.sequence
                 print("Stage index:", stage_index, "Sequence length:", len(sequence), "Sequence repeats:", stage.sequence_repeats)
-                # save the sequence to disk - handled in culture_data.py
-                #start_time = time.time() # get the current time
+                
+                # Handle Spontaneous: no Arduino/DMD; just wait for stim_time (in minutes)
+                if getattr(stage, "stim_type", None) == "Spontaneous":
+                    total_wait_s = max(0, int(getattr(stage, "stim_time", 0) * 60))
+                    print(f"Spontaneous stage: waiting {total_wait_s} s (no DMD / no Arduino)")
+                    deadline = time.time() + total_wait_s
+                    while (not self.stop_event.is_set()) and (time.time() < deadline):
+                        # Use QThread.msleep to remain responsive to stop requests
+                        QThread.msleep(100)
+                    # Continue to next stage without touching DMD/Arduino
+                    continue                
+                
                 stage.start_run_time = time.time() # time of the start of the stage run
-
                 self.protocol.save_sequence(stage_index, sequence, stage.start_run_time) # save the sequence to the culture object
                 
                  # get the sequence of the stage
@@ -134,20 +139,27 @@ class ProtocolRunner(QThread):
                         current_display_indices = sequence[i:i+arduino_buffer] # get the indices of the groups to be displayed
                         stage.create_DMDArray(current_display_indices) # create the DMDArray of images to be displayed on the DMD
 
+                        if self.plot:
+                            if seq_repeat == 0 and i == 0:  # show only at the very first chunk of this stage
+                                imgs = self._extract_preview_images(stage.DMDArray, max_n=18)
+                                titles = [f"Stage {stage_index} | Img {k}" for k in range(len(imgs))]
+                                if imgs:
+                                    self.plot_dmd.emit(imgs, titles)  # GUI thread will handle drawing
+
                         # print the size of the java array DMDArray
                         #print("DMDArray size:", stage.DMDArray.size())
                         self.core.load_slm_sequence(self.dmd_name, stage.DMDArray) # load the sequence to the DMD
                         self.msleep(len(current_display_indices)*4) # wait for the DMD to load the sequence - 4 ms per image
                         
 
-                        if self.stop_event.is_set():
+                        if self.stop_event.is_set(): # User button pressed to stop the protocol
                             print("Aborting the run")
                             self.core.stop_slm_sequence(self.dmd_name)
                             QThread.sleep(1)
                             
                             # Check if the DMD is responding
                             try: # check if the DMD is responding
-                                device_label = self.gui.core.get_property(self.dmd_name, "Label")
+                                device_label = self.core.get_property(self.dmd_name, "Label")
                                 print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")    
                                 self.core.set_slm_image(self.dmd_name, self.black_image) # display black image
                                 self.core.display_slm_image(self.dmd_name) # display black image
@@ -166,7 +178,7 @@ class ProtocolRunner(QThread):
                         # print(f"Message sent to Arduino: {message.strip()}") # uncheck to validate the message sent to Arduino
                     
                         self.core.start_slm_sequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input (to Polygon and LED) to display the images
-                        self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time) # Upload the sequence part to Arduino and trigger teh display of the images
+                        self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time) # Upload the sequence part to Arduino and trigger the display of the images
                         response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event) # wait for the Arduino to finish the sequence
 
                         if response: # for test purposes - validate the response from Arduino
@@ -193,6 +205,9 @@ class ProtocolRunner(QThread):
         end_time = time.time()
         duration = end_time - stage.start_run_time
         print("Protocol run duration:", duration)
+        # print the expected protocol time
+        expected_time = len(sequence)*4/1000 + stage.stim_time*stage.sequence_repeats*60 # in sec
+        print("Expected stage time:", expected_time)
         
         
 
@@ -234,6 +249,24 @@ class ProtocolRunner(QThread):
 
         #print("Randjavaarray prepared")
         #return self.Randjavaarray
+    def _extract_preview_images(self, dmd_array, max_n=18):
+        """Convert first max_n flattened patterns to HxW uint8 images."""
+        H, W = self.slm_height, self.slm_width
+        expect = H * W
+        images = []
+
+        # Supports both Java ArrayList (.size/.get) and Python list
+        length = dmd_array.size() if hasattr(dmd_array, "size") else len(dmd_array)
+        n = min(length, max_n)
+
+        for i in range(n):
+            flat = dmd_array.get(i) if hasattr(dmd_array, "get") else dmd_array[i]
+            arr = np.asarray(flat, dtype=np.uint8).ravel(order='C')  # ravel() was used to add
+            if arr.size != expect:
+                # skip silently; you can log if needed
+                continue
+            images.append(arr.reshape(H, W))  # Use order='F' here only if you ravel(order='F')
+        return images
 
         
            

@@ -36,17 +36,10 @@ class ProtocolSet():
             
             print("init protocol set", self.current_protocol_dir)
 
-        # def __getstate__(self): # called when pickling the ProtocolSet object by the pickle module
-        #     # exclude the bridge attribute from pickling
-        #     state = self.__dict__.copy()
-        #     # Remove the bridge attribute before pickling
-        #     if 'bridge' in state:
-        #         del state['bridge']
-        #     if 'images' in state:
-        #         del state['images']
-        #     # Handle nested Stage objects
-        #     #state['stages'] = [stage.__getstate__() for stage in self.stages]
-        #     return state
+        def __getstate__(self):
+            state = self.__dict__.copy()
+            state.pop("images", None)
+            return state
               
 
         def extract_protocol(self): # called from maingui.py following the "Load Protocol" button
@@ -91,16 +84,20 @@ class ProtocolSet():
             stage.recording = bool(row['record_stage'])
 
 
-            print("P_set number of groups:", stage.groups_number)
+            print("protocolSet number of groups:", stage.groups_number)
 
             if stage.is_manual:
                 # If manual sequence is selected, use the manual_sequence from the GUI
                 #stage.sequence = self.manual_sequence # manual sequence ??? 
                 stage.groups = self.manual_groups
                 stage.groups_number = len(stage.groups) # number of groups in the manual sequence
+                print("protocolSet groups:", stage.groups)
+                print("protocolSet number of groups:", stage.groups_number)
+                print("protocolSet Manual groups:", stage.manual_groups)
+                
                 
 
-            stage.create_sequence() # 
+            stage.create_sequence_pointer() # 
             stage.calc_interMaskInterval()
             return stage     
 
@@ -128,6 +125,7 @@ class ProtocolSet():
             with open(file_path, 'wb') as culture_file:
                 pickle.dump(self, culture_file)
             print(f"Protocol {protocols_number} saved to '{file_path}'")
+
 
 
         def save_sequence(self, index, sequence,start_time):
@@ -193,117 +191,3 @@ class ProtocolSet():
             print(f"Saved start time {start_time} for Protocol {self.protocols_number}, Stage {stage_index}.")
                     
 
-
-            
-    # create the image index for the protocol sequence
-        # def create_stimulation_sequence(self): # called by handleLoadedData in maingui.py following the "Load Protocol" button
-        #     """
-            
-        #     create sequence of images to be displayed on the DMD depending on the protocol type and parameters
-        #     The sequence is based on the self.sequence list of lists where each list is a group of cells or a single cell
-        #     if the list is longer than 1, it sum the images in the list (each image stand for single soma. When summing is will be a group of somas)
-        #     Create self.sequences_images which is the sequence of images to be displayed on the DMD
-        #     """
-
-        #     if self.stim_type == 'Random':
-        #         cs.create_random_sequence(self)
-        #     elif self.stim_type == 'Sequential':
-        #         cs.create_sequential_sequence(self)
-        #     else:
-        #         print(f"Error: Unsupported stimulation type '{self.stim_type}'. Please use 'Random' or 'Sequential'.")
-
-
-        #     # create the sequence of images to be displayed on the DMD
-        #     self.sequences_images = []
-            
-        #     for idx, stage in enumerate(self.sequences): # iterate over the stages in the protocol to create groups' masks
-        #         #print("idx", idx)
-
-
-        #         # TODO:
-        #         # IF probability stimulation is checked - create a distribution of the groups according to the number of groups
-        #         # Add black image at the end of the sequence
-        #         # self.black_image = np.zeros((self.core.getSLMHeight(self.dmd_name),
-        #         #             self.core.getSLMWidth(self.dmd_name)), dtype=np.uint8)
-        #         #javaarray = self.bridge._construct_java_object('java.util.ArrayList') # create a Java array list - each row is a vectorized image
-        #         #self.DMDArray = javaarray  # Store the Java ArrayList for the current stage
-        #         sequence_images = []
-        #         group_sum = []
-
-        #         for group in stage: # group is a list of cells either of size 1 or larger
-        #             group_images = []
-        #             for cell in group: # [1, 3, 11] - list of cells in the group
-        #                 group_images.append(self.images[cell - 1])
-
-        #             # sum the images in the group
-        #             group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
-        #             sequence_images.append(group_sum) # add one image to the sequence
-
-        #             self.stages[idx].DMDArray.add(group_sum.ravel()) # add the image to the Java array 
-        #             #self.DMDArray.append(group_sum.ravel()) # add the image to the Java array - used.add didn't work
-        #             #print("num of images in DMArray", len(self.DMDArray[idx]))
-
-
-        #             #print("group type", type(group_sum))
-        #             #group_sum_ravel = group_sum.ravel()  # Flatten the image (if needed)
-        #             #print("to_lsit type", type(group_sum_ravel.tolist()))
-
-
-        #             # print("Number of images in DMDArray:", self.DMDArray[idx].size())
-        #             # print("n images in sum", len(group_sum))
-        #             #print(f"Number of images in DMDArray[{idx}]:", javaarray.size())
-        #             #print(f"Size of group_sum (flattened): {len(group_sum_ravel)}")
-
-        #         self.sequences_images.append(sequence_images) # add one sequence to the list of sequences. Use for testing (plot) and group verification
-        #         # Debugging outputs
-        #         print(f"Stage {idx}: Sequence {stage}, Number of groups: {len(stage)}")
-
-
-        #     # print the number of sequences in the protocol
-        #     print(f"Number of sequences in the protocol: {len(self.sequences_images)} (create_stimulation_sequence)")
-
-            
-
-        #     # print all attributes of self.prot object
-        #     # for attr, value in vars(self.stages).items():
-        #     #     print(f"{attr} = {value}")
-
-
-        #     # plot the sequence of images for testing - each panel is a group of cells (or a single cell)
-        #     import matplotlib.pyplot as plt
-            
-
-        #     # plot the groups (of the DMDArray) in the stages 
-        #     for stage, sequence_images in enumerate(self.sequences_images, start=1):
-        #         fig, axes = plt.subplots(1, len(sequence_images), figsize=(15, 5))
-        #         for i, image in enumerate(sequence_images):
-        #             axes[i].imshow(image, cmap='gray')
-        #             axes[i].set_title(f"Group {i}") 
-        #         plt.show()
-
-
-        # def create_random_groups(self, numberCells, groupsNumber, group_size):
-        #     # called by handleLoadedData in maingui.py
-        #     # Check if the total number of required group members exceeds the numberCells
-        #     if groupsNumber * group_size > numberCells:
-        #         raise ValueError("Not enough cells to create the required number of groups without repeats")
-
-        #     all_cells = list(range(1, numberCells + 1))
-        #     self.groups = []
-
-        #     for _ in range(groupsNumber):
-        #         group = random.sample(all_cells, group_size)
-        #         self.groups.append(group)
-        #         # Remove the selected cells to ensure no repeats
-        #         for cell in group:
-        #             all_cells.remove(cell)
-
-        #     # create seperate list of each of the remaining cells
-        #     #self.remaining_cells = [[item] for item in all_cells]
-            
-        #     # create one list of the remaining cells
-        #     print("created groups", self.groups)
-        #     self.remaining_cells = [all_cells]
-
-
-        

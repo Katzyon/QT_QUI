@@ -13,6 +13,8 @@ import time
 import numpy as np
 import threading
 import traceback
+from datetime import datetime, timedelta
+
 #import matplotlib.pyplot as plt
  # (masks > 0).astype(np.uint8)
 
@@ -33,6 +35,7 @@ class ProtocolRunner(QThread):
         self.arduino_comm = gui.arduino_comm # arduino communication object to send messages to the Arduino
         self.recorder = gui.recorder  # RemoteRecordingManager instance for recording - currently manually initialized in the main GUI (maxwell server)
 
+        self.arduino_comm_time = 0.6 # time to wait for Arduino communication in seconds
         # print(dir(self.stages))
 
         # get the core to control the DMD
@@ -105,16 +108,18 @@ class ProtocolRunner(QThread):
                     self.recorder.start_recording(stage_index)
 
                 sequence = stage.sequence
-                print("Stage index:", stage_index, "Sequence length:", len(sequence), "Sequence repeats:", stage.sequence_repeats)
+                print("Stage index:", stage_index, "|  Sequence length:", len(sequence), "|  Sequence repeats:", stage.sequence_repeats)
                 
                 # Handle Spontaneous: no Arduino/DMD; just wait for stim_time (in minutes)
                 if getattr(stage, "stim_type", None) == "Spontaneous":
                     total_wait_s = max(0, int(getattr(stage, "stim_time", 0) * 60))
-                    print(f"Spontaneous stage: waiting {total_wait_s} s (no DMD / no Arduino)")
+                    end_time = datetime.now() + timedelta(seconds=total_wait_s)
+                    print(f"Spontaneous stage: waiting {total_wait_s} s (no DMD / no Arduino) — ends at {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    stage.start_run_time = time.time()
+    
                     deadline = time.time() + total_wait_s
                     while (not self.stop_event.is_set()) and (time.time() < deadline):
-                        # Use QThread.msleep to remain responsive to stop requests
-                        QThread.msleep(100)
+                        QThread.msleep(100) # Use QThread.msleep to remain responsive to stop requests
                     # Continue to next stage without touching DMD/Arduino
                     continue                
                 
@@ -129,7 +134,7 @@ class ProtocolRunner(QThread):
                 
                     
                 # Update the stage start time and save it.
-                self.protocol.save_start_time(stage_index, stage.start_run_time)
+                self.protocol.save_start_time(stage_index, stage.start_run_time) # save_start_time in culture object protocolSet.py
 
                 for seq_repeat in range(stage.sequence_repeats): # iterate over the number of repeats of the stage             
 
@@ -182,8 +187,9 @@ class ProtocolRunner(QThread):
                         response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event) # wait for the Arduino to finish the sequence
 
                         if response: # for test purposes - validate the response from Arduino
-                            print(f"Arduino response: {response}")
-                            print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
+                            #print(f"Arduino response: {response}")
+                            #print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
+                            pass
                         else:
                             print("Arduino wait exited (stopped or error).")
                             break
@@ -193,7 +199,11 @@ class ProtocolRunner(QThread):
                     self.core.stop_slm_sequence(self.dmd_name) # stop the sequence  - findout where to put it !!!!!!       
                     print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[stage_index].sequence_repeats} completed by Arduino.")    
                 # seq_repeat loop ends here
+
+                print("Stage", stage_index, "completed. Did recording stopped?")
+                print("stage.recording:", stage.recording)
                 if stage.recording:  # if the stage is set to record
+                    print("Stopping recording for stage", stage_index, "at runProtocol.py")
                     self.recorder.stop_recording()
             # stages loop ends here
             # stop the recording if it was started
@@ -202,12 +212,20 @@ class ProtocolRunner(QThread):
             traceback.print_exc()
 
 
+        if self.recorder:
+            try:
+                self.recorder.stop_recording()
+                print("Final stop_recording() sent at protocol end.")
+            except Exception as e:
+                print(f"Error during final recording stop: {e}")
+
         end_time = time.time()
         duration = end_time - stage.start_run_time
         print("Protocol run duration:", duration)
         # print the expected protocol time
-        expected_time = len(sequence)*4/1000 + stage.stim_time*stage.sequence_repeats*60 # in sec
-        print("Expected stage time:", expected_time)
+        comm_cycles = (len(sequence) / arduino_buffer) # number of communication cycles with Arduino per stage
+        expected_time = len(sequence)*4/1000 + stage.stim_time*stage.sequence_repeats*60 + comm_cycles * self.arduino_comm_time  # in sec
+        print("Expected stage time:", expected_time, "comm cycles:", comm_cycles)
         
         
 

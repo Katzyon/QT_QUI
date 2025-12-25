@@ -109,7 +109,7 @@ class Stage: # called by protocolSet.py
             print("Warning: Protocol.py inter_mask_interval is shorter than 50 ms")
             # it means that you should decrease the numbers of groups by increasing group size or group the remaining cells into larger groups (2 cells instead of 1) 
 
-        self.cycle_time = self.inter_mask_interval*len(self.sequence)/1000 # one cycle of a sequence in seconds
+        self.cycle_time = self.groups_period/1000*len(self.sequence) # one cycle of a sequence in seconds
         self.sequence_repeats = ceil(self.stim_time*60 / self.cycle_time) # number of protocol repeats for running the protocol
         print("stimTime sec:", self.stim_time*60, "cycleTime sec:", self.cycle_time, "n sequence repeats =", self.sequence_repeats) 
 
@@ -181,4 +181,4 @@ class Stage: # called by protocolSet.py
             ind_image = []
 
         # Debugging output
-        print("image indices", indices) 
+        #print("image indices", indices) 

@@ -1,3 +1,62 @@
+"""
+Simple DMD Stim GUI — Help
+
+What this app does
+------------------
+A lightweight PySide6 GUI for: 
+1) snapping a camera image of the neuronal culture (via Micro-Manager / PycroManager),
+2) selecting a rectangular ROI on the image that becomes a DMD/SLM stimulation mask,
+3) stimulating either once (manual) or as a timed train (frequency + duration) through an Arduino.
+
+Key behaviors & assumptions
+---------------------------
+• Display orientation matches MainGUI: the live image shown is horizontally flipped (np.fliplr).
+  ROI coordinates are mapped back to the RAW camera frame internally before building the mask.
+• ROI → DMD mapping:
+  - If a 2×3 camera→DMD affine transform is loaded, the mask is warped with cv2.warpAffine.
+  - If not, the ROI is resized to the SLM resolution (approximate).
+• Arduino timing:
+  - Each chunk is sent as: "[indices],period_ms,on_ms\\n" and waits for "Message received".
+  - The GUI then BLOCKS until the Arduino prints "Sequence finished" for that chunk,
+    and only then sends the next chunk. This prevents overlap/compression.
+  - If on_time_ms ≥ period_ms, the GUI clamps on_time_ms to period_ms - 1 and warns.
+  - Total pulses for trains use floor(freq * duration) to match prior behavior.
+• While a train runs: a red “ACTIVE” indicator + progress bar are shown and most controls are disabled.
+
+Requirements
+------------
+• Python packages: PySide6, numpy, opencv-python, pycromanager
+• Micro-Manager running with your camera and SLM/DMD configured
+• Local modules available on PYTHONPATH: Camera.py, arduino_comm.py
+• Arduino serial default: COM13 (editable in the GUI)
+
+Quick start
+-----------
+1) Launch Micro-Manager with your config; start this app.
+2) The app auto-connects to COM13 if present (you can connect manually too).
+3) Click “Load Old Affine” to restore your 2×3 affine (or “Load Affine (.npy)” to select a file).
+4) Click “Snap Image”. Draw an ROI (click-drag; release to finalize). “Clear ROI” to reset.
+5) Click “Make DMD Mask from ROI”, then “Apply Mask to DMD”.
+6) Choose Freq (Hz), On-time (ms), Duration (s). 
+   - “Manual Stim (1 pulse)” for a single pulse.
+   - “Run Stim Train” for a timed train. Use “Stop” to abort early.
+
+Troubleshooting
+---------------
+• “Core/Camera not initialized” → Make sure Micro-Manager is running and the device adapter names match.
+• “No ACK from Arduino” → Check port/baud; confirm the firmware prints "Message received".
+• Train stalls between chunks → Confirm the firmware prints "Sequence finished" when a chunk completes.
+• ROI looks mirrored on the mask → Ensure the correct affine is loaded; the display flip is intentional.
+• Deprecation warnings about QMouseEvent.pos() → The code uses event.position().toPoint() (Qt6-safe).
+
+Notes
+-----
+• The DMD mask is static during stimulation; the Arduino drives pulses via TTL.
+• If you want external-triggered sequence stepping instead of a static mask, add a toggle and use
+  the Micro-Manager SLM sequence API (`load_slm_sequence` / `start_slm_sequence`) with your TTL routing.
+"""
+
+
 
 import sys, os, math, threading
 import numpy as np

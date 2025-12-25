@@ -52,7 +52,7 @@ class RemoteRecordingManager:
         print("Recording started...")
 
     def stop_recording(self):
-        print("Stopping recording...")
+        print("Stopping recording... in remote_recording_manager.py")
         self.send("saving_stop_recording")
 
         print("Closing file...")

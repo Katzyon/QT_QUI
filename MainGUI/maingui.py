@@ -157,6 +157,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
          #self.stage = self.core.getXYStageDevice() # Java case CamelCase
          self.xy_stage_device = self.core.get_xy_stage_device() # python case snake_case 
          self.xy_stage = StageController(self.core, self.xy_stage_device, self.stage_position) # xy stage interface object
+         
+
          devices = [self.core.get_loaded_devices().get(i) for i in range(self.core.get_loaded_devices().size())]
          print(f"PycroManager connected. Devices: {devices}")
          self.update_stage_pos()
@@ -340,7 +342,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         self.core.set_exposure(self.exposure)
 
-    def detect_Cells(self):
+    def detect_Cells(self): # called by detectCells button (Detect cells)
         # get the number of frames to average from nAverage line edit
         self.averageN = int(self.nAverage.text())
         
@@ -364,29 +366,28 @@ class MainGui(QMainWindow, Ui_MainGui): #
         
         # Detecting cell bodies
         # get the min and max particle area from the line edits
-        self.min_area = int(self.minsize.text())
-        self.max_area = int(self.maxsize.text())
+        # self.min_area = int(self.minsize.text())
+        # self.max_area = int(self.maxsize.text())
         self.cellDiameter = int(self.cellpose_diameter.text()) # cellpose_diameter
 
-
         self.rotated_averageImage = cv2.transpose(self.averageImage)
-        detected_cells = DetectCell.detect_particles(self.rotated_averageImage, self.min_area, self.max_area)
-        self.img_rotated = detected_cells
+        # detected_cells = DetectCell.detect_particles(self.rotated_averageImage, self.min_area, self.max_area)
+        # self.img_rotated = detected_cells
         
         # detected_cells = DetectCell.detect_particles(self.averageImage, self.min_area, self.max_area)
         # self.img_rotated = cv2.transpose(detected_cells)
         
 
-        plt.imshow(self.img_rotated, cmap='gray')
-        plt.title("Detected Neuronal Somas")
+        # plt.imshow(self.img_rotated, cmap='gray')
+        # plt.title("Detected Neuronal Somas")
 
-        fig_height, fig_width = self.img_rotated.shape[:2]
-        x = 100
-        y = 100
-        manager = plt.get_current_fig_manager()
-        manager.window.setGeometry(x, y, fig_width, fig_height)
+        # fig_height, fig_width = self.img_rotated.shape[:2]
+        # x = 100
+        # y = 100
+        # manager = plt.get_current_fig_manager()
+        # manager.window.setGeometry(x, y, fig_width, fig_height)
 
-        plt.show()
+        # plt.show()
 
         # detect somas using Cellpose - conflicting error by use of OpenMP.
         # detected_somas = DetectSomas.detect_somas(self.averageImage, 10)

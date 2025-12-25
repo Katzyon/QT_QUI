@@ -25,7 +25,8 @@ class getImage:  # called by init_window.py
         self.binning = core.get_property(self.name, "Binning")
         core.set_property(self.name, "Binning", "2x2")
         print(self.name, "Binning: ", self.binning)
-        core.set_property(self.name, "Exposure", 2)
+        core.set_property(self.name, "Exposure", 7)
+        print(self.name, "Exposure time: ", core.get_exposure())
 
 
 

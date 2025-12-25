@@ -1,4 +1,5 @@
-""" Started following button press on 'Stimulate all cells'. 
+""" 
+Started following button press on 'Stimulate all cells'. 
  It activate the DMD and project sequencialy single soma masks from the list self.binary_images
 """
 

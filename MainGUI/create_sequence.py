@@ -143,15 +143,19 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
 def create_order_sequence(stage):
     # create a sequence of images according to the order of the groups (same probability for all groups)
     # repeat the basic sequence many times
+    from math import ceil
 
     print("create_order_sequence called")
-    print("number of groups:", stage.groups_number)
-    n = stage.group_distribution_number * stage.groups_number  # number of repetitions of the sequence
+    
+    # n = stage.group_distribution_number * stage.groups_number  # number of repetitions of the sequence
+    n = ceil(stage.stim_time*60 / ((stage.groups_period / 1000) * stage.groups_number))  # adjust n according to the stim_time and groups_period
     stage.sequence = np.tile(np.arange(stage.groups_number), n).tolist()
+    # print the time length of the sequence
+    print("number of groups:", stage.groups_number, "|  group period (ms):", stage.groups_period, "|  stim_time (min):", stage.stim_time)
     
     print("manual groups:", stage.groups)
     for group in stage.groups: # group is a list of cells either of size 1 or larger
-        print("group:", group)
+        #print("group:", group)
         group_images = []
         for cell in group: # [1, 3, 11] - list of cells in the group
             group_images.append(stage.images[cell - 1])
@@ -159,7 +163,7 @@ def create_order_sequence(stage):
         # sum the images in the group
         group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
         stage.groups_images.append(group_sum) # add one image to the sequence
-        print("group image shape:", group_sum.shape)
+        #print("group image shape:", group_sum.shape)
         
 
 def create_decay_probabilities(groupsNumber, group_probability_ratio):

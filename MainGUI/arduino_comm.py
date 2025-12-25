@@ -20,13 +20,14 @@ class ArduinoComm:
     def send_message(self, indices, period, on_time):
         indices_str = ','.join(map(str, indices))
         message = f"[{indices_str}],{period},{on_time}\n"
+        #print(f"Sent to Arduino: {message.strip()}")
 
-        if len(message.encode()) > 60:
-            raise ValueError("Message too long for Arduino serial buffer (max ~60 bytes)")
+        if len(message.encode()) > 62:
+            raise ValueError("Message too long for Arduino serial buffer (max ~62 bytes)")
 
         self.arduino.reset_input_buffer()
         self.arduino.write(message.encode())
-        print(f"Sent to Arduino: {message.strip()}")
+        
 
         return self._wait_for_ack()
 

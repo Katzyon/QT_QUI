@@ -41,18 +41,19 @@ import time
 import pickle
 import traceback
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QInputDialog, QLineEdit
 #
 from PySide6.QtCore import Qt, Slot
+
 #from PySide6.QtGui import QImage, QPixmap, QScreen
 # import QScreen from PySide6.QtGui to get the screen resolution
 
 
 # Important: QT GUI
 # You need to run the following command to generate the ui_form.py file (in Python terminal at the (pattern) environment):
-#     cd("G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI")
+#     G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI
 #     pyside6-uic form.ui -o form_ui.py
-#     cd G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI  
+#     G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI
 #     pyside6-uic Protocols.ui -o Protocols_ui.py  # for the protocols window
 
 
@@ -97,6 +98,11 @@ class MainGui(QMainWindow, Ui_MainGui): #
         super(MainGui, self).__init__()
         
         self.setupUi(self) # setup the GUI from Ui_MainGui via the ui_form.py file
+        
+        # print("QLineEdit objectNames in loaded UI:")
+        # for w in self.findChildren(QLineEdit):
+        #     print(" -", w.objectName())
+
         self.imageview.ui.histogram.show() # show the histogram in the imageview widget
         self.stopProtocol.setVisible(False) # or True
 
@@ -141,7 +147,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.connect_buttons()
         
         # connect to Arduino
-        #self.connect_arduino(port=self.arduino_port, baudrate=19200, timeout=2)
         self.arduino_comm = ArduinoComm.connect(port='COM13', baudrate=19200, timeout=2)
         self.arduino = self.arduino_comm.arduino # get the serial object from the ArduinoComm class
         
@@ -554,12 +559,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
         #     self.manualGroups.append(group['cells'])
         print("manualGroups:", self.manualGroups)
 
-        
-
-        
-
-
-
     def on_finished_processing(self):
     # Handle post-processing after cellpose is done
         print("MainGUI Cellpose processing finished")
@@ -638,6 +637,8 @@ class MainGui(QMainWindow, Ui_MainGui): #
     # handles the dataframe returned from the file_loader_dialog (in load_protocol function)
     def handleLoadedData(self, data):
         # Set all the parameters for running the protocol 
+        self.n_protocol_repeats = int(self.protocol_repeats.text()) # get the number of repeats from the line edit
+
 
         #print("handleLoadedData: ", data)
         self.stages_table = data # data is the protocol csv file as a dataframe returned from the file_loader_dialog
@@ -652,31 +653,12 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
     
 
-    # def run_protocol(self):
-    #     """ Following button press run the protocol """
-        
-        
-    #     self.stopProtocol.setVisible(True) # make the stopProtocol button visible
-    #     # check if a protocol is loaded
-    #     if self.stages_table.empty:
-    #         print("No protocol loaded")
-    #         self.show_error_message("No protocol loaded","Load protocol from file")
-    #     else:
-    #         print("Protocol set")
-    #         print(self.stages_table)
-
-            
-    #         # run the protocol
-    #         self.protocol_runner = ProtocolRunner(self)
-    #         self.protocol_runner.start() # run the protocol
-    #         #self.protocol_runner.protocolFinishSignal.connect(self.cleanupProtocolRunner)
-    #         self.protocol_runner.finished.connect(self.cleanupProtocolRunner)
-
     def run_protocol(self):
         """Following button press run the protocol"""
 
         self.stopProtocol.setVisible(True)  # show Stop button
-
+        
+        
         # Validate protocol presence
         if self.stages_table.empty:
             print("No protocol loaded")
@@ -686,8 +668,15 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print("Protocol set")
         print(self.stages_table)
 
+        # get the current protocol repeats from the line edit
+        self.n_protocol_repeats = int(self.protocol_repeats.text())
+
         # Create a fresh runner
-        self.protocol_runner = ProtocolRunner(gui=self, parent=self)
+        #self.protocol_runner = ProtocolRunner(gui=self, parent=self)
+        self.protocol_runner = ProtocolRunner(
+            gui=self,
+            parent=self
+        )
 
         # Connect finished → cleanup
         self.protocol_runner.finished.connect(self.cleanupProtocolRunner)
@@ -706,15 +695,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # Go
         self.protocol_runner.start()
 
-        
-    # def cleanupProtocolRunner(self):
-        
-    #     self.protocol_runner.deleteLater()
-        
-
-    #     print("Protocol runner deleted")
-    #     self.stopProtocol.setVisible(False)
-    #     # !!! save and update the culture object with the new protocol
         
 
     def cleanupProtocolRunner(self):
@@ -811,11 +791,12 @@ class MainGui(QMainWindow, Ui_MainGui): #
             if match:
                 existing_indices.append(int(match.group(1)))
 
-        next_index = max(existing_indices, default=0) + 1
-        new_folder_name = f"Protocol_{next_index}"
+        self.culture.protocols_number = max(existing_indices, default=0) +1
+        new_folder_name = f"Protocol_{self.culture.protocols_number}"
         new_folder_path = os.path.join(protocols_dir, new_folder_name)
         os.makedirs(new_folder_path)
         self.culture.current_protocol_dir = new_folder_path
+        
 
         print(f"Created new protocol directory: {new_folder_path}")
 
@@ -949,16 +930,27 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.move_stage.clicked.connect(self.move_stage_pos) # connect move_stage button to move_stage function
         self.record_button.clicked.connect(self.init_recording) # connect recording button to init_recording function
 
+    
+    def get_protocol_repeats(self) -> int:   # get the protocol repeats from the line edit protocol_repeats
+        text = self.protocol_repeats.text().strip()
+        if not text:
+            return 1
+        try:
+            value = int(text)
+        except ValueError:
+            return 1
+        return max(1, value)
+    
     def init_recording(self):
-        if self.recorder is not None:
-            print("Recorder is already initialized and connected.")
-            return
+        # if self.recorder is not None:
+        #     print("Recorder is already initialized and connected.")
+        #     return
 
         print("Initializing RemoteRecordingManager...")
         # check if the chip number is set
         if not hasattr(self, 'chip_number') or not self.chip_number:
             self.chip_number = self.working_dir.split(os.sep)[-1]  # Use the last part of the working directory as chip number
-        print("chip number was artificially set")
+            print("chip number was artificially set")
 
         # connect to Maxwell server
         self.recorder = RemoteRecordingManager(
@@ -970,7 +962,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         try:
             self.recorder.connect()
-            time.sleep(1)  # wait for connection to stabilize
+            # time.sleep(1)  # wait for connection to stabilize
             print("Recorder connected successfully.")
             print(f"Recorder save directory: {self.recorder.save_dir} , file prefix: {self.recorder.file_prefix}")
         except Exception as e:

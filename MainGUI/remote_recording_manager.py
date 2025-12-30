@@ -18,9 +18,29 @@ class RemoteRecordingManager:
         self.send = None
 
     def connect(self) -> None:
-        self.api = ApiComm(self.host, self.port)
-        self.send = self.api.send
-        print(f"[{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')}] Disconnected from Maxwell server.")
+        self.disconnect()
+
+        try:
+            self.api = ApiComm(self.host, self.port)
+            self.send = self.api.send
+
+            try: # server handshake
+                reply = self.send("system_offset")
+            except Exception:
+                reply = DelaySamples(0).send(self.api)
+
+            if reply is None:
+                raise ConnectionError("No reply received from server.")
+
+            print(
+                f"[{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')}] "
+                "Connected to Maxwell server."
+            )
+        except Exception as e:
+            self.disconnect()
+            raise ConnectionError(
+                f"Failed to connect to Maxwell server at {self.host}:{self.port}."
+            ) from e
 
 
     def disconnect(self) -> None:
@@ -52,32 +72,25 @@ class RemoteRecordingManager:
         print("Recording started...")
 
     def stop_recording(self):
-        print("Stopping recording... in remote_recording_manager.py")
         self.send("saving_stop_recording")
 
-        print("Closing file...")
+        print("Save and Closing file...")
         self.send("saving_stop_file")
 
     def ping(self, timeout_s: float = 2.0) -> bool:
-        """
-        Ask the server for its command list (`help`).
-        If we get any reply at all, the link is alive.
-        """
-        if self.send is None:
-            raise RuntimeError("Not connected.")
+        """Return True if the server responds to a lightweight command."""
+        if self.send is None or self.api is None:
+            return False
+
         try:
-            #reply = self.send("maxlab.system.StatusOut")
-            #reply = DelaySamples(0).send(self.api)
-            #reply = DelaySamples(0).send(self.api)
-            reply = self.send("saving_stop_recording")
-            print(f"Ping reply: {reply}")
-            ans = True
-            
+            try:
+                reply = self.send("help")
+            except Exception:
+                reply = DelaySamples(0).send(self.api)
+            return reply is not None
         except Exception as e:
             print(f"Ping failed: {e}")
-            ans = False
-
-        return ans
+            return False
 
     def monitor_until_timeout(self,
                               check_interval_sec: int = 30,

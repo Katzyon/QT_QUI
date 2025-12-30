@@ -33,6 +33,7 @@ class ProtocolSet():
             self.protocols_directory = gui.protocols_directory # directory for saving the protocol
             self.current_protocol_dir = gui.culture.current_protocol_dir # current protocol directory
             self.protocols_number = gui.culture.protocols_number # number of the current protocol
+            self.repeats = gui.n_protocol_repeats
             
             print("init protocol set", self.current_protocol_dir)
 

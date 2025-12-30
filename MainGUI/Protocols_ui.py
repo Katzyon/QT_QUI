@@ -17,7 +17,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QGridLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QPushButton, QSizePolicy, QWidget)
+    QPushButton, QSizePolicy, QSpinBox, QWidget)
 
 class Ui_protocols(object):
     def setupUi(self, protocols):
@@ -32,10 +32,10 @@ class Ui_protocols(object):
         self.label.setFont(font)
         self.label_2 = QLabel(protocols)
         self.label_2.setObjectName(u"label_2")
-        self.label_2.setGeometry(QRect(40, 50, 91, 16))
+        self.label_2.setGeometry(QRect(190, 50, 91, 16))
         self.num_cells = QLabel(protocols)
         self.num_cells.setObjectName(u"num_cells")
-        self.num_cells.setGeometry(QRect(140, 80, 49, 21))
+        self.num_cells.setGeometry(QRect(290, 80, 49, 21))
         font1 = QFont()
         font1.setPointSize(14)
         self.num_cells.setFont(font1)
@@ -47,13 +47,13 @@ class Ui_protocols(object):
         self.label_4.setGeometry(QRect(330, 240, 101, 16))
         self.addStage = QPushButton(protocols)
         self.addStage.setObjectName(u"addStage")
-        self.addStage.setGeometry(QRect(820, 200, 75, 24))
+        self.addStage.setGeometry(QRect(970, 200, 75, 24))
         self.ncells = QLabel(protocols)
         self.ncells.setObjectName(u"ncells")
-        self.ncells.setGeometry(QRect(150, 50, 49, 16))
+        self.ncells.setGeometry(QRect(300, 50, 49, 16))
         self.layoutWidget = QWidget(protocols)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(30, 83, 909, 118))
+        self.layoutWidget.setGeometry(QRect(180, 83, 909, 118))
         self.gridLayout = QGridLayout(self.layoutWidget)
         self.gridLayout.setObjectName(u"gridLayout")
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
@@ -215,7 +215,19 @@ class Ui_protocols(object):
         self.closeWindow.setGeometry(QRect(814, 540, 91, 24))
         self.label_12 = QLabel(protocols)
         self.label_12.setObjectName(u"label_12")
-        self.label_12.setGeometry(QRect(480, 60, 311, 16))
+        self.label_12.setGeometry(QRect(630, 60, 311, 16))
+        self.protocol_repeats = QSpinBox(protocols)
+        self.protocol_repeats.setObjectName(u"protocol_repeats")
+        self.protocol_repeats.setGeometry(QRect(40, 80, 61, 25))
+        self.protocol_repeats.setFont(font)
+        self.protocol_repeats.setValue(1)
+        self.ncells_2 = QLabel(protocols)
+        self.ncells_2.setObjectName(u"ncells_2")
+        self.ncells_2.setGeometry(QRect(20, 50, 121, 16))
+        font3 = QFont()
+        font3.setPointSize(11)
+        font3.setWeight(QFont.DemiBold)
+        self.ncells_2.setFont(font3)
 
         self.retranslateUi(protocols)
 
@@ -285,5 +297,6 @@ class Ui_protocols(object):
         self.removeStage.setText(QCoreApplication.translate("protocols", u"Remove last", None))
         self.closeWindow.setText(QCoreApplication.translate("protocols", u"Close window", None))
         self.label_12.setText(QCoreApplication.translate("protocols", u"After change / update add new fields to protocol_design", None))
+        self.ncells_2.setText(QCoreApplication.translate("protocols", u"Protocol repeats", None))
     # retranslateUi
 

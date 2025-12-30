@@ -7,7 +7,7 @@
 
 
 from PySide6.QtWidgets import QDialog, QMessageBox
-from Protocols_ui import Ui_protocols
+from Protocols_ui import Ui_protocols  # import the generated QT file from Protocols.ui 
 
 #import stage_dialog as sd
 import pandas as pd

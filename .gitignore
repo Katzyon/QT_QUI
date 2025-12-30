@@ -1,3 +1,11 @@
+# Generated protocol outputs
+MainGUI/Protocols/*.csv
+
+# Qt / editor temporary files
+*.TMP
+*.tmp
+*.ui~*git add .gitignore
+
 # Ignore all Google Slides and Google Sheets files
 *.gslides
 *.gsheet

@@ -9,9 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from MainGUI.remote_recording_manager import RemoteRecordingManager
 
 # Time configuration (in seconds)
-TOTAL_DURATION = 60*60*15    #  seconds total duration
+TOTAL_DURATION = 60*60*13    #  seconds total duration
 RECORDING_TIME = 20            # Record for  seconds
-RECORD_CYCLE = 60*30          # Every  60*minutes
+RECORD_CYCLE = 60*20          # Every  60*minutes
 
 def record_seconds_every_minutes_for_time():
     manager = RemoteRecordingManager()

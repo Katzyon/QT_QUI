@@ -7,6 +7,8 @@
 
 
 from PySide6.QtWidgets import QDialog, QMessageBox
+from PySide6 import QtCore
+
 from Protocols_ui import Ui_protocols  # import the generated QT file from Protocols.ui 
 
 #import stage_dialog as sd
@@ -47,6 +49,11 @@ class protocol_set(QDialog, Ui_protocols):
         # cellsNumber 
         super(protocol_set, self).__init__()
         self.setupUi(self) # setup the UI from Protocols_ui.py file (Qt Creator)
+
+        # Toggle the manual sequence and ROI use buttons
+        self.is_manual_sequence.toggled.connect(self._on_manual_toggled)
+        self.use_roi.toggled.connect(self._on_roi_toggled)
+
         self.stages_table = pd.DataFrame() # create an empty dataframe for the protocol
         # connect addStage button to add_new_stage method
         self.addStage.clicked.connect(self.add_new_stage)
@@ -84,6 +91,7 @@ class protocol_set(QDialog, Ui_protocols):
             "is_manual_sequence": self.is_manual_sequence.isChecked(),
             "prob_stim": self.prob_stim.isChecked(),
             "record_stage": self.record_stage.isChecked(),
+            "use_roi": self.use_roi.isChecked(),
             
             # Other parameters...
         }
@@ -199,6 +207,22 @@ class protocol_set(QDialog, Ui_protocols):
 
         self.out_group = out_group[0]['cells']
     
+    def _on_manual_toggled(self, checked: bool):
+        if not checked:
+            return
+
+        # If manual grouping is selected, uncheck ROI
+        blocker = QtCore.QSignalBlocker(self.use_roi)
+        self.use_roi.setChecked(False)
+
+
+    def _on_roi_toggled(self, checked: bool):
+        if not checked:
+            return
+
+        # If ROI is selected, uncheck manual grouping
+        blocker = QtCore.QSignalBlocker(self.is_manual_sequence)
+        self.is_manual_sequence.setChecked(False)
 
         
 

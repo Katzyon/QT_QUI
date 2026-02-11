@@ -21,6 +21,7 @@ class ProtocolSet():
     
         def __init__(self, gui):
             super(ProtocolSet, self).__init__()
+            self.roi_mask_path = getattr(gui, "roi_dmd_mask_path", None)
             self.stages_table = gui.stages_table # dataframe of the protocol
             self.manual_sequence = gui.manual_sequence # list of manually selected groups
             self.manual_groups = gui.manualGroups # list of manually selected groups
@@ -40,14 +41,18 @@ class ProtocolSet():
         def __getstate__(self):
             state = self.__dict__.copy()
             state.pop("images", None)
+            #state.pop("gui", None)  # NEW: MainGui is not picklable
             return state
-              
 
         def extract_protocol(self): # called from maingui.py following the "Load Protocol" button
             """ Extract the protocol from the dataframe before setting it. Called from maingui.py following the "Load Protocol" button"""
 
+            if "use_roi" not in self.stages_table.columns:
+                self.stages_table["use_roi"] = False
+
             """Extract and set up the protocol from a DataFrame, initiated from a GUI."""
             self.headers = list(self.stages_table.columns)
+
             self.data = self.stages_table.values.tolist()
             print("protocolSet - data:", self.data)
             self.n_rows = len(self.data)
@@ -83,6 +88,11 @@ class ProtocolSet():
             stage.cycle_time = stage.groups_period
             # set the recording flag from the boolean checkbox in the GUI 
             stage.recording = bool(row['record_stage'])
+            stage.use_roi = bool(row.get("use_roi", False))
+            stage.roi_mask_path = getattr(self, "roi_mask_path", None)
+            if stage.use_roi and not stage.roi_mask_path:
+                raise FileNotFoundError("Stage requests ROI, but MainGUI has no roi_mask_path. Create ROI mask first.")
+
 
 
             print("protocolSet number of groups:", stage.groups_number)
@@ -95,8 +105,11 @@ class ProtocolSet():
                 print("protocolSet groups:", stage.groups)
                 print("protocolSet number of groups:", stage.groups_number)
                 print("protocolSet Manual groups:", stage.manual_groups)
-                
-                
+
+            if stage.use_roi and stage.is_manual:
+                raise ValueError("Invalid stage configuration: both Manual Groups and ROI are enabled. Choose only one.")
+
+                           
 
             stage.create_sequence_pointer() # 
             stage.calc_interMaskInterval()

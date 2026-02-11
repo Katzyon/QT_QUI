@@ -65,6 +65,8 @@ class Stage: # called by protocolSet.py
         self.square_size = 10
         self.square_groups = 1 # number of square simultaneuosly presented as a group
         self.recording = False # flag to indicate if the stage is being recorded
+        self.use_roi = False
+        self.roi_mask_path = None
         
         
     def __getstate__(self):
@@ -154,6 +156,31 @@ class Stage: # called by protocolSet.py
             cs.create_random_sequence(self) # create_sequence in the Potocol object stage (create_sequence.py)
 
         elif self.stim_type == 'Order': # create repeated stimulation according to the order of the groups
+
+            if getattr(self, "use_roi", False):
+                import os
+                import cv2
+                from math import ceil
+
+                if not self.roi_mask_path or not os.path.exists(self.roi_mask_path):
+                    raise FileNotFoundError(
+                        "Stage requests ROI but roi_mask_path is missing or does not exist."
+                    )
+
+                roi = cv2.imread(self.roi_mask_path, cv2.IMREAD_GRAYSCALE)
+                if roi is None:
+                    raise ValueError(f"Failed to load ROI mask: {self.roi_mask_path}")
+
+                # Provide exactly one 'group image'
+                self.groups_images = [roi]
+                self.groups_number = 1
+
+                # Repeat the same image for duration (Order-like cadence)
+                n = ceil(self.stim_time * 60 / (self.groups_period / 1000))
+                self.sequence = [0] * n
+
+                return
+
             cs.create_order_sequence(self)
 
         elif self.stim_type == 'Test':

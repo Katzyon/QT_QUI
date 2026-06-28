@@ -718,6 +718,7 @@ Details: {e}
         if self.affine is not None and self.core is not None:
             try:
                 slm_w, slm_h = self.slm_w, self.slm_h
+                cam_mask = np.rot90(cam_mask, -1)
                 slm_img = cv2.warpAffine(cam_mask, self.affine, (slm_w, slm_h))
                 return np.ascontiguousarray(np.clip(slm_img, 0, 255).astype(np.uint8))
             except Exception as e:

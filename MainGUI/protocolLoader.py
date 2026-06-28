@@ -9,7 +9,7 @@ import pandas as pd
 class ProtocolLoader(QDialog):
     """ open a dialog to load a protocol csv file"""
 
-    signalOutData = Signal(object) # signal to send the dataframe to the main window
+    signalOutData = Signal(object, str) # signal to send the dataframe and protocol name to the main window
 
     def __init__(self, parent=None):
         super(ProtocolLoader, self).__init__(parent)
@@ -51,15 +51,16 @@ class ProtocolLoader(QDialog):
         # if selected_item:
         file_name = selected_item.text()
         file_path = os.path.join(r"G:\My Drive\Research\Projects\Theory of cortical mind\Object representation\Software\Python\QT_GUI\MainGUI\Protocols", file_name)
-        #     # Here you can add the logic to handle the file loading
-        #     QMessageBox.information(self, "File Selected", f"You selected: {file_path}")
+
+        # Extract protocol name from filename (remove .csv)
+        self.protocol_name = os.path.splitext(file_name)[0]
 
         # read the csv data into a dataframe
         self.protocol = pd.read_csv(file_path)
 
         # return the dataframe to the main window with the signal emit
-        self.signalOutData.emit(self.protocol)
-
+        self.signalOutData.emit(self.protocol, self.protocol_name)
+        print("  >>> ProtocolLoader : ", self.protocol_name)
         # close the dialog
         self.close()
 

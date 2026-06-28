@@ -67,6 +67,7 @@ class Stage: # called by protocolSet.py
         self.recording = False # flag to indicate if the stage is being recorded
         self.use_roi = False
         self.roi_mask_path = None
+        self.raw_recording = False # whether to enable raw-trace recording for this stage (if False, only maxlab spikes will be recorded)
         
         
     def __getstate__(self):

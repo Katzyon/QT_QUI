@@ -18,8 +18,7 @@ import GroupCellsClickWidget as gcc
 import tifffile
 
 
-class protocol_set(QDialog, Ui_protocols):
-
+class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user clicks the "Set Protocol" button. 
 # add sphinx documentation
     """ open a dialog to set a new protocol parameters
     Parameters
@@ -76,6 +75,7 @@ class protocol_set(QDialog, Ui_protocols):
         self.culture = culture
         self.out_group = []
         self.df = pd.DataFrame()
+        self.protocol_name = ""
 
     def get_stage_data(self):
         # Initialize the stage data dictionary
@@ -91,6 +91,7 @@ class protocol_set(QDialog, Ui_protocols):
             "is_manual_sequence": self.is_manual_sequence.isChecked(),
             "prob_stim": self.prob_stim.isChecked(),
             "record_stage": self.record_stage.isChecked(),
+            "raw_recording": self.record_raw.isChecked(),
             "use_roi": self.use_roi.isChecked(),
             
             # Other parameters...
@@ -152,13 +153,11 @@ class protocol_set(QDialog, Ui_protocols):
         user_input = simpledialog.askstring("Protocol Name", "Please name the protocol:")
         # Print or use the input
         
-        # get the protocol name from the dialog
-        self.protocol_name = user_input
         # add the protocol name to the prefix
-        prefix = prefix + "_" + self.protocol_name
-
+        self.protocol_name = prefix + "_" + user_input # contain the date and time and the protocol name from the user dialog
+        
         # save the stages_table dataframe to a csv file in Protocols folder
-        self.stages_table.to_csv(path + "\\" + prefix + "_protocol.csv", index=False)
+        self.stages_table.to_csv(path + "\\" + self.protocol_name + "_protocol.csv", index=False)
 
         
         # print the stages_table dataframe

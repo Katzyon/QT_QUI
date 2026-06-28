@@ -1,4 +1,4 @@
-# ProtocolRunner class for running a protocol
+# ProtocolRunner class for running a protocol called by the main GUI when the user clicks the "Run Protocol" button.
 # It is a subclass of QThread
 # It has a signal to send the dataframe to the main window
 # It has a method to run the protocol (run_protocol) by iterating over the dataframe self.stages_table 
@@ -8,12 +8,13 @@
 #from PySide6.QtWidgets import QApplication, QDialog, QListWidget, QVBoxLayout, QMessageBox, QPushButton
 from PySide6.QtCore import Slot, Signal, QThread
 import pandas as pd
-import random
 import time
 import numpy as np
 import threading
 import traceback
 from datetime import datetime, timedelta
+import re
+
 
 #import matplotlib.pyplot as plt
  # (masks > 0).astype(np.uint8)
@@ -27,9 +28,11 @@ class ProtocolRunner(QThread):
     def __init__(self, gui, parent=None):
         super().__init__(parent)
         self.n_protocol_repeats = gui.n_protocol_repeats # number of protocol repeats from the main GUI
+        self.file_tag = gui.get_file_tag() # file tag from the main GUI to use as prefix for saving files
         self.stop_event = threading.Event() # event to stop the protocol from button press in the main GUI
         self.culture = gui.culture # culture object to save the protocol run data
         self.protocol = gui.protocol # protocol is a protocolSet object which contains Stage objects in the stages attribute
+        self.protocol_name = gui.protocol_name # protocol name from the main GUI to use for saving files
         self.stages = self.protocol.stages # list of stages in the protocol
         self.currentStage = 0
         #self.arduino = gui.arduino # arduino object to control the polygon, light source and MaxOne digipins
@@ -84,6 +87,8 @@ class ProtocolRunner(QThread):
         #self.times = 0  
         self.culture.protocols_number += 1 # update the number of protocols in the culture object
         print("protocols number:", self.culture.protocols_number)
+        # print the protocol name
+        print("protocol prefix name:", self.protocol_name)
         # add the current protocol to the .protocols list in the culture object
         
         # print the number of stages in the protocol
@@ -102,7 +107,7 @@ class ProtocolRunner(QThread):
                             print("Aborting the run")
                             return
                     
-                    unique_stage_id = protocol_repeat_idx * len(self.stages) + stage_index
+                    unique_stage_id = (protocol_repeat_idx+1) * len(self.stages) + stage_index
                     
                     # if index 0 update and save the culture and the protocol ????
                     if protocol_repeat_idx == 0 and stage_index == 0:
@@ -112,16 +117,33 @@ class ProtocolRunner(QThread):
 
                     sequence = stage.sequence
                     arduino_buffer = stage.ard_buffer # number of integers to be sent to the Arduino buffer - to sync with MaxOne
-                    print("Stage index:", stage_index, "|  Sequence length:", len(sequence), "|  Sequence repeats:", stage.sequence_repeats)
+                    #print("Stage index:", stage_index, "|  Sequence length:", len(sequence), "|  Sequence repeats:", stage.sequence_repeats)
+                    
+                    print(f"Stage index:, {stage_index + 1} / out of {len(self.stages)}, |  Sequence length:, {len(sequence)}, |  Sequence repeats:, {stage.sequence_repeats} ")
+
+                    print("Start-recording gate:",
+                        "stage.recording=", stage.recording,
+                        "stage.raw_recording=", getattr(stage, "raw_recording", None)
+                        )
+
 
                     recording_started = False
-                    if stage.recording and self.recorder: # if the stage is set to record                         
-                        #self.recorder.start_recording(unique_stage_id)
-                        prefix = f"{unique_stage_id}_{stage.stim_type}"
-                        self.recorder.start_recording(prefix)
+                    if stage.recording and self.recorder:
+                        self.update_protocol_name() # update the protocol name with the current date and time
                         
-                        print("Recording started: ", unique_stage_id, "at runProtocol.py L120")
+                        rp_str = f"rp_{protocol_repeat_idx + 1}"
+                        si_str = f"si_{stage_index}"
+
+                        prefix = (
+                            f"{self.protocol_name}_"
+                            f"{rp_str}_"
+                            f"{si_str}_"
+                            f"{stage.stim_type}"
+                        )
+                        
+                        self.recorder.start_recording(prefix, raw_enabled=bool(getattr(stage, "raw_recording", False)))
                         recording_started = True
+                        print(f"Started recording for stage {unique_stage_id} with prefix '{prefix}' at runProtocol.py")
                        
                     try:
                         stage.start_run_time = time.time() # time of the start of the stage run
@@ -206,7 +228,7 @@ class ProtocolRunner(QThread):
                             print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[stage_index].sequence_repeats} completed by Arduino.")  
 
                         # seq_repeat loop ends here
-                        print("Completed stage:", stage_index, "recording:", stage.recording)
+                        print("Completed stage:", stage_index + 1, "recording:", stage.recording)
 
 
                     finally:
@@ -226,6 +248,8 @@ class ProtocolRunner(QThread):
                             except Exception as e:
                                 print(f"Error stopping recording for unique stage {unique_stage_id}: {e}")
 
+                    
+                print(">>> FINISHED ALL STAGES in this repeat")
                 # stages loop ends here
             # protocol repeats loop ends here
 
@@ -308,8 +332,42 @@ class ProtocolRunner(QThread):
                 continue
             images.append(arr.reshape(H, W))  # Use order='F' here only if you ravel(order='F')
         return images
+    
+    def update_protocol_name(self):
+        """Replace the YYYYMMDD and time (_HHMM_ or _HHMMSS_) parts with current date/time.
 
-        
-           
+        Expected (loosely): <chip>_<YYYYMMDD>_<HHMM or HHMMSS>_<rest...>
+        We locate the date by matching the current year.
+        The time is replaced only when it's between underscores.
+        """
+        if not self.protocol_name:
+            re.error("Protocol name is empty. Cannot update with current date/time.")
+            return self.protocol_name
+            
+
+        now = datetime.now()
+        date_str = now.strftime("%Y%m%d")
+        time_str = now.strftime("%H%M")      # you said H,m
+        year = now.strftime("%Y")
+
+        s = self.protocol_name
+
+        # Replace the first date like YYYYMMDD that starts with current year
+        s, n_date = re.subn(rf"{year}\d{{4}}", date_str, s, count=1)
+        if n_date == 0:
+            re.error(f"No date found in protocol name '{self.protocol_name}' to replace. Expected a date starting with the current year {year}.")
+            self.protocol_name = s
+            return self.protocol_name
+
+        # Replace the first time between underscores AFTER the date: _HHMM_ or _HHMMSS_
+        idx = s.find(date_str)
+        prefix = s[:idx + len(date_str)]
+        rest = s[idx + len(date_str):]
+
+        # Replace digits only, requiring underscores on both sides
+        rest, _ = re.subn(r"_(\d{4}|\d{6})_", f"_{time_str}_", rest, count=1)
+
+        self.protocol_name = prefix + rest
+        return self.protocol_name
 
 

@@ -39,13 +39,21 @@ def make_masks(self):
     # print the number of binary images
     print("number of binary images:", len(self.binary_images))
 
-    # plot the image using matplotlib
-    plt.figure(figsize=(12, 4))
-    plt.get_current_fig_manager().set_window_title("GUI_createMasks_make_masks")
-    plt.imshow(cv2.transpose(self.masks), cmap='gray')
-    plt.title("Masks Images Gray scaled somas index")
+    fig = plt.figure(figsize=(5, 5), dpi=100)  # ≈11.5 cm
+
+    manager = plt.get_current_fig_manager()
+    manager.set_window_title("GUI_createMasks_make_masks")
+
+    # position on screen: x, y, width, height
+    manager.window.setGeometry(650, 180, 500, 500)
+
+    ax = fig.add_subplot(111)
+    ax.imshow(np.rot90(self.masks, 1), cmap='gray', aspect='auto')
+
+    ax.set_title("Masks Images Gray scaled somas index")
+
+    plt.tight_layout()
     plt.show()
-    # sleep
 
 
 

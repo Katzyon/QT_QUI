@@ -42,8 +42,8 @@ class CellPicker(QObject): #
         super(CellPicker, self).__init__(parent)
         assert len(image.shape) == 2, "Image should be a 2D array."
 
-        self.flip_x_display = True              # <<< match your other viewers (fliplr)
-        self.rotate_k = 3                     # <<< match your other viewers (0,1,2,3 = 0°,90°,180°,270°)
+        # self.flip_x_display = True              # <<< match your other viewers (fliplr)
+        # self.rotate_k = 3                     # <<< match your other viewers (0,1,2,3 = 0°,90°,180°,270°)
         self.H, self.W = image.shape            # <<< keep dimensions for mapping
 
         self.original_image = image
@@ -76,42 +76,21 @@ class CellPicker(QObject): #
         
     def _to_display(self, arr):
         """Rotate CCW by rotate_k, then optionally flip horizontally for display."""
-        out = np.rot90(arr, k=self.rotate_k)
-        return np.fliplr(out) if self.flip_x_display else out
+        
+        #return np.fliplr(arr) 
+        return np.rot90(arr, 1)
+
+
 
     def _disp_to_raw(self, x_disp, y_disp):
-        """
-        Map display (imshow) coords back to raw image coords.
-        Invert flip first, then invert rotation, for any rotate_k in {0,1,2,3}.
-        """
+
         x = int(round(x_disp))
         y = int(round(y_disp))
 
-        # width of the displayed image after rotation
-        disp_W = self.W if (self.rotate_k % 2 == 0) else self.H
-
-        # undo optional horizontal flip on the displayed image
-        if self.flip_x_display:
-            x = disp_W - 1 - x
-
-        # undo rotation (inverse mapping of np.rot90(arr, k=self.rotate_k))
-        if self.rotate_k == 0:        # 0°
-            x_raw, y_raw = x, y
-        elif self.rotate_k == 1:      # 90° CCW
-            x_raw = self.W - 1 - y
-            y_raw = x
-        elif self.rotate_k == 2:      # 180°
-            x_raw = self.W - 1 - x
-            y_raw = self.H - 1 - y
-        elif self.rotate_k == 3:      # 270° CCW
-            x_raw = y
-            y_raw = self.H - 1 - x
-        else:
-            raise ValueError("rotate_k must be in {0,1,2,3}")
+        x_raw = self.W - 1 - y
+        y_raw = x
 
         return x_raw, y_raw
-
-
 
 
     def __call__(self, event):

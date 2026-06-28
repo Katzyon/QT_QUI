@@ -59,7 +59,7 @@ class ProtocolSet():
             self.number_cells = len(self.images)
 
             for index, row in self.stages_table.iterrows():
-                print(f"stage number: {index}, row: \n{row}")
+                print(f"stage number: {index}, user input row:s \n{row}")
                 stage = self._create_stage_from_row(row, index)
                 self.stages.append(stage)
                 print(f"protocolSet output group: {stage.output_group}")
@@ -88,6 +88,7 @@ class ProtocolSet():
             stage.cycle_time = stage.groups_period
             # set the recording flag from the boolean checkbox in the GUI 
             stage.recording = bool(row['record_stage'])
+            stage.raw_recording = bool(row.get("raw_recording", False)) # whether to enable raw-trace recording for this stage (if False, only maxlab spikes will be recorded)
             stage.use_roi = bool(row.get("use_roi", False))
             stage.roi_mask_path = getattr(self, "roi_mask_path", None)
             if stage.use_roi and not stage.roi_mask_path:

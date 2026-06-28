@@ -586,22 +586,6 @@
  time</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="record_button">
-    <property name="geometry">
-     <rect>
-      <x>390</x>
-      <y>600</y>
-      <width>91</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="whatsThis">
-     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Perform calibration between camera image and DMD.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-    </property>
-    <property name="text">
-     <string>Run Recorder</string>
-    </property>
-   </widget>
    <widget class="QLineEdit" name="file_tag">
     <property name="geometry">
      <rect>

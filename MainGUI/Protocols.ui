@@ -65,7 +65,7 @@
   <widget class="QListWidget" name="listWidget">
    <property name="geometry">
     <rect>
-     <x>30</x>
+     <x>56</x>
      <y>270</y>
      <width>901</width>
      <height>261</height>
@@ -75,7 +75,7 @@
   <widget class="QLabel" name="label_4">
    <property name="geometry">
     <rect>
-     <x>330</x>
+     <x>356</x>
      <y>240</y>
      <width>101</width>
      <height>16</height>
@@ -88,8 +88,8 @@
   <widget class="QPushButton" name="addStage">
    <property name="geometry">
     <rect>
-     <x>970</x>
-     <y>200</y>
+     <x>1010</x>
+     <y>210</y>
      <width>75</width>
      <height>24</height>
     </rect>
@@ -121,10 +121,59 @@
     </rect>
    </property>
    <layout class="QGridLayout" name="gridLayout">
+    <item row="2" column="4">
+     <widget class="QLineEdit" name="background_freq">
+      <property name="text">
+       <string>1</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="3">
+     <widget class="QLabel" name="label_13">
+      <property name="text">
+       <string>Light ON 
+ time (ms)</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="3">
+     <widget class="QLineEdit" name="on_time">
+      <property name="text">
+       <string>5</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="2">
+     <widget class="QCheckBox" name="prob_stim">
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="7">
+     <widget class="QLabel" name="label_14">
+      <property name="text">
+       <string>Is manual 
+ groups</string>
+      </property>
+     </widget>
+    </item>
     <item row="2" column="6">
      <widget class="QLineEdit" name="groups_period">
       <property name="text">
        <string>400</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="12">
+     <widget class="QLabel" name="label_5">
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string extracomment="Check box to record the stage in MaxOne">RECORD</string>
       </property>
      </widget>
     </item>
@@ -135,27 +184,25 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="5">
-     <widget class="QLabel" name="label_10">
-      <property name="whatsThis">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Add jitter to the stimulation sequence&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-      </property>
+    <item row="2" column="9">
+     <widget class="QLineEdit" name="group_size">
       <property name="text">
-       <string>Jitter</string>
+       <string>12</string>
       </property>
      </widget>
     </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="label_3">
+    <item row="0" column="14">
+     <widget class="QLabel" name="label_16">
       <property name="text">
-       <string>Stage</string>
+       <string>Press to define 
+ output group</string>
       </property>
      </widget>
     </item>
-    <item row="2" column="4">
-     <widget class="QLineEdit" name="background_freq">
+    <item row="2" column="14">
+     <widget class="QPushButton" name="output_group">
       <property name="text">
-       <string>1</string>
+       <string>Output group</string>
       </property>
      </widget>
     </item>
@@ -166,19 +213,26 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="1">
-     <widget class="QLabel" name="label_9">
+    <item row="0" column="8">
+     <widget class="QLabel" name="label_17">
       <property name="text">
-       <string>Type</string>
+       <string>Use users 
+ ROI</string>
       </property>
      </widget>
     </item>
-    <item row="0" column="6">
-     <widget class="QLabel" name="label_6">
+    <item row="2" column="7">
+     <widget class="QCheckBox" name="is_manual_sequence">
       <property name="text">
-       <string>Groups period 
- (ms) 
-</string>
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="9">
+     <widget class="QLabel" name="label_7">
+      <property name="text">
+       <string>Group size 
+ Square size</string>
       </property>
      </widget>
     </item>
@@ -222,59 +276,6 @@
       </item>
      </widget>
     </item>
-    <item row="0" column="4">
-     <widget class="QLabel" name="label_11">
-      <property name="text">
-       <string>Background 
- stimulation (Hz)</string>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="2">
-     <widget class="QCheckBox" name="prob_stim">
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="12">
-     <widget class="QLabel" name="label_5">
-      <property name="font">
-       <font>
-        <bold>true</bold>
-       </font>
-      </property>
-      <property name="text">
-       <string extracomment="Check box to record the stage in MaxOne">RECORD</string>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="3">
-     <widget class="QLabel" name="label_13">
-      <property name="text">
-       <string>Light ON 
- time (ms)</string>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="11">
-     <widget class="QLabel" name="label_8">
-      <property name="text">
-       <string>Stimulation 
- time (min)</string>
-      </property>
-      <property name="textFormat">
-       <enum>Qt::TextFormat::PlainText</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="13">
-     <widget class="QPushButton" name="output_group">
-      <property name="text">
-       <string>Output group</string>
-      </property>
-     </widget>
-    </item>
     <item row="0" column="2">
      <widget class="QLabel" name="label_15">
       <property name="text">
@@ -283,18 +284,20 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="7">
-     <widget class="QLabel" name="label_14">
+    <item row="0" column="5">
+     <widget class="QLabel" name="label_10">
+      <property name="whatsThis">
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Add jitter to the stimulation sequence&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      </property>
       <property name="text">
-       <string>Is manual 
- groups</string>
+       <string>Jitter</string>
       </property>
      </widget>
     </item>
-    <item row="2" column="9">
-     <widget class="QLineEdit" name="group_size">
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_3">
       <property name="text">
-       <string>12</string>
+       <string>Stage</string>
       </property>
      </widget>
     </item>
@@ -310,14 +313,6 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="13">
-     <widget class="QLabel" name="label_16">
-      <property name="text">
-       <string>Press to define 
- output group</string>
-      </property>
-     </widget>
-    </item>
     <item row="2" column="11">
      <widget class="QLineEdit" name="stim_time">
       <property name="text">
@@ -325,25 +320,27 @@
       </property>
      </widget>
     </item>
-    <item row="2" column="7">
-     <widget class="QCheckBox" name="is_manual_sequence">
+    <item row="0" column="4">
+     <widget class="QLabel" name="label_11">
       <property name="text">
-       <string/>
+       <string>Background 
+ stimulation (Hz)</string>
       </property>
      </widget>
     </item>
-    <item row="0" column="9">
-     <widget class="QLabel" name="label_7">
+    <item row="0" column="6">
+     <widget class="QLabel" name="label_6">
       <property name="text">
-       <string>Group size 
- Square size</string>
+       <string>Groups period 
+ (ms) 
+</string>
       </property>
      </widget>
     </item>
-    <item row="2" column="3">
-     <widget class="QLineEdit" name="on_time">
+    <item row="0" column="1">
+     <widget class="QLabel" name="label_9">
       <property name="text">
-       <string>5</string>
+       <string>Type</string>
       </property>
      </widget>
     </item>
@@ -354,16 +351,34 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="8">
-     <widget class="QLabel" name="label_17">
+    <item row="2" column="8">
+     <widget class="QCheckBox" name="use_roi">
       <property name="text">
-       <string>Use users 
- ROI</string>
+       <string/>
       </property>
      </widget>
     </item>
-    <item row="2" column="8">
-     <widget class="QCheckBox" name="use_roi">
+    <item row="0" column="11">
+     <widget class="QLabel" name="label_8">
+      <property name="text">
+       <string>Stimulation 
+ time (min)</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::TextFormat::PlainText</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="13">
+     <widget class="QLabel" name="label_18">
+      <property name="text">
+       <string>Record 
+ raw data</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="13">
+     <widget class="QCheckBox" name="record_raw">
       <property name="text">
        <string/>
       </property>
@@ -374,7 +389,7 @@
   <widget class="QPushButton" name="saveProtocol">
    <property name="geometry">
     <rect>
-     <x>680</x>
+     <x>706</x>
      <y>540</y>
      <width>91</width>
      <height>24</height>
@@ -400,7 +415,7 @@ QPushButton:
   <widget class="QPushButton" name="removeStage">
    <property name="geometry">
     <rect>
-     <x>30</x>
+     <x>56</x>
      <y>540</y>
      <width>75</width>
      <height>24</height>
@@ -413,7 +428,7 @@ QPushButton:
   <widget class="QPushButton" name="closeWindow">
    <property name="geometry">
     <rect>
-     <x>814</x>
+     <x>840</x>
      <y>540</y>
      <width>91</width>
      <height>24</height>

@@ -74,7 +74,7 @@ from protocolSet import ProtocolSet as ps # import the ProtocolSet class from th
 import DMDCalibrate as dc  # Calibrate DMD position with camera image
 import clickcollect as cc # click on the image to get the DMD coordinates
 import numpy as np
-import DetectCell # detect cells using opencv
+#import DetectCell # detect cells using opencv
 import DetectCells_thread as dct # detect cells using cellpose
 #from AllSomaStim import SomaStimulationWorker # Stimulate all deected somas
 from AllSomaQTimer import SomaStimulationWorker
@@ -93,7 +93,7 @@ except Exception:
 
 from runProtocol import ProtocolRunner # run the protocol - create the sequence of images to be displayed on the DMD
 from protocolLoader import ProtocolLoader as pl
-from remote_recording_manager import RemoteRecordingManager  # for remote recording management
+from ssh_tunnel_recording_manager import SshTunnelRecordingManager, TunnelConfig
 from stage_controller import StageController
 # import CreateMasks
 # import DetectSomas
@@ -125,6 +125,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.culture_dir = None
         self.culture = None
         self.stages_table = pd.DataFrame()
+        self.protocol_name = ""
         self.manual_sequence = []    # list of lists of cells to be selected manually
         self.protocol = None # protocol object may have list of Stages
         self.mode = "test" # test or run
@@ -134,7 +135,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         self.light_click_pixels = 10 # size of the light click pixels in the mainGUI
         self.light_click_ms_time = 10
         self.img_rotated = None # image with detected cells rotated
-        self.rotated_averageImage = None # average image rotated
+        #self.rotated_averageImage = None # average image rotated
         self.manualGroups = []
         self.recorder = None  # RemoteRecordingManager instance for recording
         self.chip_number = None  # MaxOne chip number
@@ -377,7 +378,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("You already have a culture for today. Delete the folder and run again")
             # exit the function
             return
-
+    
         print("Saving image to: ", self.image_dir)
         self.camera.saveImage(self.averageImage, self.image_dir)
 
@@ -388,7 +389,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # self.max_area = int(self.maxsize.text())
         self.cellDiameter = int(self.cellpose_diameter.text()) # cellpose_diameter
 
-        self.rotated_averageImage = cv2.transpose(self.averageImage)
+        #self.rotated_averageImage = cv2.transpose(self.averageImage)
         # detected_cells = DetectCell.detect_particles(self.rotated_averageImage, self.min_area, self.max_area)
         # self.img_rotated = detected_cells
         
@@ -407,8 +408,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         # plt.show()
 
-        # detect somas using Cellpose - conflicting error by use of OpenMP.
-        # detected_somas = DetectSomas.detect_somas(self.averageImage, 10)
          # Create an instance of the worker
         print("Starting Cellpose processing, WAIT...")
         self.detectMsg = self.show_error_message("Soma detection","Cellpose processing, CLOSE THIS NOTIFICATION TO PROCEED", QMessageBox.Information)
@@ -416,9 +415,6 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # print the size of the averageImage
         print("Average image before cellpose: ", self.averageImage[0, :3])
 
-
-        # Soma detection using Cellpose
-        #self.cellpose_worker = dct.CellposeWorker(self.rotated_averageImage, self.cellDiameter) # cells image and diameter
         
         self.cellpose_worker = dct.CellposeWorker(self.averageImage, self.cellDiameter) #  dct is  DetectCells_thread   cells image and diameter
         self.cellpose_worker.updatePlot.connect(self.cellPoseResult) # plot model output in main GUI thread - Cellpose
@@ -460,23 +456,34 @@ class MainGui(QMainWindow, Ui_MainGui): #
 
         plt.figure(figsize=(12, 4))
         # Add title to the figure window
-        plt.suptitle("Soma Detection Results", fontsize=16)
+        plt.suptitle("Soma Detection Results - maingui L460", fontsize=16)
 
         plt.subplot(1, 4, 1)
-        
-        plt.imshow(cv2.transpose(img_array), cmap='gray')
+        #plt.imshow(np.fliplr(img_array), cmap='gray') 
+        plt.imshow(np.rot90(img_array, 1), cmap='gray')
         plt.title("Original Image")
 
+        # plt.subplot(1, 4, 2)
+        # plt.imshow(np.fliplr(self.masks), cmap='tab20b')
+        # plt.title("Segmentation Masks-DetectCells_thread.py")
+
+        # plt.subplot(1, 4, 3)
+        # plt.imshow(np.fliplr(self.binary_image_all), cmap='gray')
+        # plt.title("Binary  Masks")
+
+        # plt.subplot(1, 4, 4)
+        # plt.imshow(np.fliplr(flow_magnitude), cmap='viridis')
+        # plt.title("Flow Magnitude-cellPoseResult in MainGUI")
         plt.subplot(1, 4, 2)
-        plt.imshow(cv2.transpose(self.masks), cmap='tab20b')
+        plt.imshow(np.rot90(self.masks, 1), cmap='tab20b')
         plt.title("Segmentation Masks-DetectCells_thread.py")
 
         plt.subplot(1, 4, 3)
-        plt.imshow(cv2.transpose(self.binary_image_all), cmap='gray')
-        plt.title("Binary  Masks")
+        plt.imshow(np.rot90(self.binary_image_all, 1), cmap='gray')
+        plt.title("Binary Masks")
 
         plt.subplot(1, 4, 4)
-        plt.imshow(cv2.transpose(flow_magnitude), cmap='viridis')
+        plt.imshow(np.rot90(flow_magnitude, 1), cmap='viridis')
         plt.title("Flow Magnitude-cellPoseResult in MainGUI")
 
         plt.tight_layout()
@@ -538,12 +545,11 @@ class MainGui(QMainWindow, Ui_MainGui): #
         # create masks for each group
         
         
-# Click and group button - manual grouping of cells to create a group mask 
+# Click and group manual button - manual grouping of cells to create a group mask 
     def manual_masks(self):
         # Adding manual masks for cells
-        print("groupCells clicked")
+        #print("groupCells clicked")
         
-        #import GroupCellsClick as gcc # sys.path.append at the beginning of the file solves the problem
         import GroupCellsClickWidget as gcc
         
         image_path = self.image_dir + r"\mask_output.tif"
@@ -635,8 +641,11 @@ class MainGui(QMainWindow, Ui_MainGui): #
         """Callback for when the protocol window is closed"""
         # Get the updated stages_table from the protocol window
         self.stages_table = self.protocol_window.stages_table
+
         # look for the output_group column in the stages_table ? 
         print("MainGUI: stages ", self.stages_table)
+        self.protocol_name = self.protocol_window.protocol_name
+        print("Protocol name: ", self.protocol_name)
 
 
 
@@ -647,16 +656,32 @@ class MainGui(QMainWindow, Ui_MainGui): #
         file_loader_dialog.signalOutData.connect(self.handleLoadedData) # signalOutData = Signal(object) # signal to send the dataframe to the main window
         file_loader_dialog.exec() # 
 
+       
+
+
     # handles the dataframe returned from the file_loader_dialog (in load_protocol function)
-    def handleLoadedData(self, data):
+    def handleLoadedData(self, data, protocol_name):
         # Set all the parameters for running the protocol 
         self.n_protocol_repeats = int(self.protocol_repeats.text()) # get the number of repeats from the line edit
+        self.protocol_name = protocol_name # get the protocol name from the file_loader_dialog
+        print("Protocol name set to: ", self.protocol_name)
+        #self.file_tag_input = self.get_file_tag() # get the file tag from the line edit
 
-
-        #print("handleLoadedData: ", data)
         self.stages_table = data # data is the protocol csv file as a dataframe returned from the file_loader_dialog
         self.protocol = ps(self) # create the Protocol setting object by protocolSet.py file
-        self.protocol.extract_protocol() # 
+        self.protocol.extract_protocol() 
+
+        # --- Initialize recording automatically ---
+        if self.recorder is None:
+            print("Auto-initializing recorder after protocol load...")
+            self.init_recording()
+        else:
+            print("Recorder already initialized.")
+
+
+
+
+
         # print("self.protocol.stages.numberCells: ", self.protocol.stages[0].number_cells)
         # print("self.protocol.stages.repeats: ", self.protocol.stages[0].sequence_repeats)
 
@@ -681,7 +706,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print("Protocol set")
         print(self.stages_table)
 
-        # get the current protocol repeats from the line edit
+        # get the current protocol repeats from the line edit in the GUI
         self.n_protocol_repeats = int(self.protocol_repeats.text())
 
         # Create a fresh runner
@@ -1021,7 +1046,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
         print(f"Simple DMD: last ROI mask saved to {bmp_path}")
 
     
-    def get_protocol_repeats(self) -> int:   # get the protocol repeats from the line edit protocol_repeats
+    def get_protocol_repeats(self) -> int:   # get the protocol repeats from the line edit protocol_repeats. called by ProtocolRunner to determine how many times to repeat the protocol
         text = self.protocol_repeats.text().strip()
         if not text:
             return 1
@@ -1031,7 +1056,13 @@ class MainGui(QMainWindow, Ui_MainGui): #
             return 1
         return max(1, value)
     
-    def init_recording(self):
+    # get the file tag (file_tag field in the GUI) if it's not empty, to use as prefix for saving files. called by ProtocolRunner when saving protocol results
+    
+    def get_file_tag(self) -> str:
+        text = self.file_tag.text().strip()
+        return text if text else ""
+
+    def init_recording(self): # button press on the mainGUI to initialize the connection to the Maxwell recording system via SSH tunnel and API
         # if self.recorder is not None:
         #     print("Recorder is already initialized and connected.")
         #     return
@@ -1043,18 +1074,25 @@ class MainGui(QMainWindow, Ui_MainGui): #
             print("chip number was artificially set")
 
         # connect to Maxwell server
-        self.recorder = RemoteRecordingManager(
-            host="132.77.68.106",
-            port=7215,
+        self.recorder = SshTunnelRecordingManager(
             save_dir="/home/mxwbio/Data/recordings",
-            file_prefix=self.chip_number  # file name + stage index
+            file_prefix=self.chip_number,
+            tunnel=TunnelConfig(
+                ssh_user="mxwbio",
+                ssh_host="132.77.68.106",
+                local_port=7215,
+                remote_host="127.0.0.1",
+                remote_port=7215,
+            ),
+            wells=[0],                 # MaxOne
+            raw_enabled_default=True,  # default behavior (you can flip to False)
+            raw_channels_default="all",
+            manage_tunnel_process=True # auto-start tunnel
         )
 
         try:
             self.recorder.connect()
-            # time.sleep(1)  # wait for connection to stabilize
-            print("Recorder connected successfully.")
-            print(f"Recorder save directory: {self.recorder.save_dir} , file prefix: {self.recorder.file_prefix}")
+            print("Recorder (SSH tunnel + maxlab API) connected successfully.")
         except Exception as e:
             print(f"Error connecting to recorder: {e}")
             self.recorder = None

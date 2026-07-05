@@ -9,7 +9,7 @@
 from PySide6.QtWidgets import QDialog, QMessageBox
 from PySide6 import QtCore
 
-from Protocols_ui import Ui_protocols  # import the generated QT file from Protocols.ui 
+from Protocols_ui2 import Ui_protocols  # import the generated QT file from Protocols.ui 
 
 #import stage_dialog as sd
 import pandas as pd
@@ -93,6 +93,7 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
             "record_stage": self.record_stage.isChecked(),
             "raw_recording": self.record_raw.isChecked(),
             "use_roi": self.use_roi.isChecked(),
+            "roi_presentation_mode": self.roi_presentation_mode.currentText() if self.use_roi.isChecked() else ""
             
             # Other parameters...
         }

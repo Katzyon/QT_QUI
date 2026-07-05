@@ -809,16 +809,35 @@ class MainGui(QMainWindow, Ui_MainGui): #
         
         # load the soma masks from the DMD directory
         self.soma_masks = []
-        DMD_files = os.listdir(self.DMD_dir)
-        sorted_file_names = sorted(DMD_files, key=lambda x: int(x.split(".")[0]))
-        # create the DMD_images array
-        for filen in sorted_file_names:
-            if filen.endswith(".bmp"):
-                # read the image and append
-                image = cv2.imread(os.path.join(self.DMD_dir, filen), cv2.IMREAD_GRAYSCALE) # Read DMD sized images
-                self.soma_masks.append(image)
-                # print the size the DMD_images array
-        print(f"cell_number: {len(self.soma_masks)}, image size: {image.shape}")
+
+        if os.path.isdir(self.DMD_dir):
+            DMD_files = os.listdir(self.DMD_dir)
+
+            bmp_files = [f for f in DMD_files if f.endswith(".bmp")]
+
+            def file_sort_key(x):
+                try:
+                    return int(os.path.splitext(x)[0])
+                except ValueError:
+                    return float("inf")
+
+            sorted_file_names = sorted(bmp_files, key=file_sort_key)
+
+            for filen in sorted_file_names:
+                image_path = os.path.join(self.DMD_dir, filen)
+                image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+
+                if image is not None:
+                    self.soma_masks.append(image)
+                else:
+                    print(f"Could not read image, skipping: {image_path}")
+        else:
+            print(f"DMD directory not found: {self.DMD_dir}")
+
+        if self.soma_masks:
+            print(f"cell_number: {len(self.soma_masks)}, image size: {self.soma_masks[0].shape}")
+        else:
+            print("cell_number: 0, image size: not available")
 
         protocols_dir = os.path.join(self.culture_dir, "Protocols")
         pattern = re.compile(r'^Protocol_(\d+)$') # matches "Protocol_1", "Protocol_2", etc.
@@ -1033,7 +1052,7 @@ class MainGui(QMainWindow, Ui_MainGui): #
             arduino_comm=getattr(self, "arduino_comm", None),  # share, don't reconnect
             affine=affine,
         )
-        self.simple_dmd_window.maskSaved.connect(self._on_simple_dmd_mask_saved)
+        self.simple_dmd_window.maskSaved.connect(self._on_simple_dmd_mask_saved) # signal emitted when the mask is saved, connected to the handler  
         self.simple_dmd_window.show()
 
     def _on_simple_dmd_mask_saved(self, bmp_path: str):

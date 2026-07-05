@@ -5,7 +5,7 @@ What this app does
 ------------------
 A lightweight PySide6 GUI for: 
 1) snapping a camera image of the neuronal culture (via Micro-Manager / PycroManager),
-2) selecting rectangular ROIs on the image that become a DMD/SLM stimulation mask,
+2) selecting a rectangular ROI on the image that becomes a DMD/SLM stimulation mask,
 3) stimulating either once (manual) or as a timed train (frequency + duration) through an Arduino.
 
 Key behaviors & assumptions
@@ -35,8 +35,8 @@ Quick start
 1) Launch Micro-Manager with your config; start this app.
 2) The app auto-connects to COM13 if present (you can connect manually too).
 3) Click “Load Old Affine” to restore your 2×3 affine (or “Load Affine (.npy)” to select a file).
-4) Click “Snap Image”. Draw one or more ROIs (click-drag; release to finalize). Use “Delete ROI” or “Clear ROIs” to reset.
-5) Click “Make DMD Mask from ROIs”, then “Apply Mask to DMD”.
+4) Click “Snap Image”. Draw an ROI (click-drag; release to finalize). “Clear ROI” to reset.
+5) Click “Make DMD Mask from ROI”, then “Apply Mask to DMD”.
 6) Choose Freq (Hz), On-time (ms), Duration (s). 
    - “Manual Stim (1 pulse)” for a single pulse.
    - “Run Stim Train” for a timed train. Use “Stop” to abort early.
@@ -62,6 +62,7 @@ import sys, os, math, threading
 import time
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph import SignalProxy
 import cv2
 from typing import Optional
 
@@ -309,19 +310,15 @@ class SimpleStimWindow(QMainWindow):
             if not ok:
                 raise IOError("cv2.imwrite returned False")
 
-            rects = self._get_all_roi_rects_display()
             rect_vals = self._get_current_roi_rect_display()
             if rect_vals is None:
                 rect_vals = (0, 0, 0, 0)
             xd0, yd0, ww, hh = rect_vals
             rect = QRect(int(xd0), int(yd0), int(ww), int(hh))
-            rects_arr = np.array(rects, dtype=np.float32) if rects else np.zeros((0, 4), dtype=np.float32)
             meta_path = os.path.abspath(os.path.join(self.save_dir, "roi_mask_meta.npz"))
             np.savez(
                 meta_path,
                 rect=np.array([rect.x(), rect.y(), rect.width(), rect.height()], dtype=np.int32),
-                rects=rects_arr,
-                active_roi_index=np.array([self._active_roi_index()], dtype=np.int32),
                 display_flip_x=bool(self.display_flip_x),
                 affine=(self.affine if self.affine is not None else np.zeros((2, 3), dtype=np.float32)),
                 has_affine=bool(self.affine is not None),
@@ -348,17 +345,8 @@ class SimpleStimWindow(QMainWindow):
         except Exception:
             pass
         self._display_shape = None  # (H, W) of last displayed frame
-        # ROI storage: one entry per independent RectROI. `roi_params` is reserved
-        # for future per-ROI stimulation settings.
-        self.rois = []
-        self.roi_params = {}
-        self.active_roi = None
-        self._roi_pen = pg.mkPen('y', width=2)
-        self._active_roi_pen = pg.mkPen('c', width=3)
         self._roi_drag_active = False
         self._roi_drag_origin = None
-        self._roi_drag_item = None
-        self._viewbox_mouse_drag_event = None
         image_box = QGroupBox("Camera image / ROI")
         v = QVBoxLayout(image_box)
         v.addWidget(self.imageview)
@@ -372,12 +360,10 @@ class SimpleStimWindow(QMainWindow):
         grid.addWidget(self.snap_btn,0,0); grid.addWidget(self.load_affine_btn,0,1); grid.addWidget(self.load_old_affine_btn,0,2)
 
         # Row 1: ROI
-        self.make_mask_btn=QPushButton("Make DMD Mask from ROIs"); self.current_rect_label=QLabel("ROIs: -")
-        self.delete_roi_btn=QPushButton("Delete ROI"); self.clear_roi_btn=QPushButton("Clear ROIs")
+        self.make_mask_btn=QPushButton("Make DMD Mask from ROI"); self.current_rect_label=QLabel("ROI: -"); self.clear_roi_btn=QPushButton("Clear ROI")
         grid.addWidget(self.make_mask_btn,1,0)
         grid.addWidget(self.current_rect_label,1,1,1,3)
-        grid.addWidget(self.delete_roi_btn,1,4)
-        grid.addWidget(self.clear_roi_btn,1,5)
+        grid.addWidget(self.clear_roi_btn,1,4)
 
 
         # Row 2: DMD
@@ -421,14 +407,19 @@ class SimpleStimWindow(QMainWindow):
         self._setup_imageview_roi()
         self.setStatusBar(QStatusBar(self)); exit_act=QAction("&Exit",self); exit_act.triggered.connect(self.close); self.menuBar().addMenu("&File").addAction(exit_act)
 
-    
-    
+    def _set_active_led(self, active: bool):
+            size = 14
+            if getattr(self, "active_led", None) is not None:
+                self.active_led.setFixedSize(size, size)
+                color = "#D11" if active else "#666"
+                self.active_led.setStyleSheet(f"background-color: {color}; border-radius: {size//2}px; border: 1px solid #333;")
+            if getattr(self, "active_lbl", None) is not None:
+                self.active_lbl.setStyleSheet("color: #D11;" if active else "color: #666;")
     def _connect_signals(self):
             self.snap_btn.clicked.connect(self.on_snap)
             self.load_affine_btn.clicked.connect(self.on_load_affine_generic)
             self.load_old_affine_btn.clicked.connect(self.load_old_affine)
             self.make_mask_btn.clicked.connect(self.on_make_mask)
-            self.delete_roi_btn.clicked.connect(self.on_delete_roi)
             self.clear_roi_btn.clicked.connect(self.on_clear_roi)
             # No explicit save button; saving happens automatically on mask creation.
             self.apply_mask_btn.clicked.connect(self.on_apply_mask)
@@ -580,293 +571,105 @@ Details: {e}
 
 
     def _setup_imageview_roi(self):
-        """Configure ImageView display and drag-to-create multi-ROI behavior."""
+        """Configure ImageView display and a draggable RectROI, plus optional drag-to-create behavior."""
         # Ensure axes behave like image pixels (0,0 at top-left; y down).
         try:
             vb = self.imageview.getView()
         except Exception:
             vb = None
 
+        # Add a rectangular ROI item that the user can drag/resize.
+        self.roi_rect = pg.RectROI([10, 10], [50, 50], pen=pg.mkPen('y', width=2))
+        self.roi_rect.setZValue(10)
         if vb is not None:
+            vb.addItem(self.roi_rect)
             vb.setAspectLocked(True)
-            # Empty-image left drag creates a new ROI; RectROI keeps its own
-            # move/resize behavior once created.
-            self._viewbox_mouse_drag_event = vb.mouseDragEvent
-            vb.mouseDragEvent = self._on_viewbox_mouse_drag_event
+
+        # Update the label whenever the ROI changes
+        try:
+            self.roi_rect.sigRegionChanged.connect(self._on_pg_roi_changed)
+        except Exception:
+            pass
+
+        # Optional: drag-to-create ROI (rubberband-like).
+        # Left-click + drag on the image to define a new ROI rectangle.
+        try:
+            scene = self.imageview.getView().scene()
+            scene.sigMouseClicked.connect(self._on_scene_mouse_clicked)
+            self._mouse_move_proxy = SignalProxy(scene.sigMouseMoved, rateLimit=60, slot=self._on_scene_mouse_moved)
+        except Exception:
+            self._mouse_move_proxy = None
 
         # Initialize label
         self._on_pg_roi_changed()
 
-    def _active_roi_index(self):
-        try:
-            return self.rois.index(self.active_roi)
-        except Exception:
-            return -1
-
-    def _get_viewbox(self):
-        try:
-            return self.imageview.getView()
-        except Exception:
-            return None
-
-    def _add_roi(self, x, y, w, h):
-        """Add one RectROI and make it active."""
-        roi = pg.RectROI([float(x), float(y)], [max(1.0, float(w)), max(1.0, float(h))], pen=self._roi_pen)
-        roi.setZValue(10)
-        vb = self._get_viewbox()
-        if vb is not None:
-            vb.addItem(roi)
-        self.rois.append(roi)
-        self.roi_params[roi] = {}
-        try:
-            roi.sigRegionChanged.connect(self._on_pg_roi_changed)
-            roi.sigClicked.connect(lambda *args, roi=roi: self._on_roi_clicked(roi, args[-1] if args else None))
-        except Exception:
-            pass
-        try:
-            roi.sigRegionChangeStarted.connect(lambda *args, roi=roi: self._set_active_roi(roi))
-        except Exception:
-            pass
-        self._set_active_roi(roi)
-        return roi
-
-    def _remove_roi(self, roi, select_next=True):
-        if roi is None or roi not in self.rois:
-            return
-        old_index = self.rois.index(roi)
-        vb = self._get_viewbox()
-        if vb is not None:
-            try:
-                vb.removeItem(roi)
-            except Exception:
-                pass
-        self.rois.remove(roi)
-        self.roi_params.pop(roi, None)
-        if self.active_roi is roi:
-            next_roi = None
-            if select_next and self.rois:
-                next_roi = self.rois[min(old_index, len(self.rois) - 1)]
-            self.active_roi = None
-            self._set_active_roi(next_roi)
-        else:
-            self._on_pg_roi_changed()
-
-    def _clear_rois(self):
-        """Remove every ROI and reset active ROI state."""
-        for roi in list(self.rois):
-            self._remove_roi(roi, select_next=False)
-        self.rois.clear()
-        self.roi_params.clear()
-        self.active_roi = None
-        self._roi_drag_active = False
-        self._roi_drag_origin = None
-        self._roi_drag_item = None
-        self._on_pg_roi_changed()
-
-    def _set_active_roi(self, roi):
-        """Track the single active ROI and update its visual outline."""
-        if roi is not None and roi not in self.rois:
-            return
-        self.active_roi = roi
-        for item in self.rois:
-            try:
-                item.setPen(self._active_roi_pen if item is roi else self._roi_pen)
-            except Exception:
-                pass
-        self._on_pg_roi_changed()
-
-    def _on_roi_clicked(self, roi, ev):
-        self._set_active_roi(roi)
-        try:
-            ev.accept()
-        except Exception:
-            pass
-
-    def _get_roi_rect_display(self, roi):
-        """Return one ROI as (x, y, w, h) in displayed image pixel coordinates."""
-        if roi is None:
+    def _get_current_roi_rect_display(self):
+        """Return ROI rectangle as (x, y, w, h) in displayed image pixel coordinates."""
+        if not hasattr(self, 'roi_rect') or self.roi_rect is None:
             return None
         try:
-            pos = roi.pos()
-            size = roi.size()
+            pos = self.roi_rect.pos()
+            size = self.roi_rect.size()
             return (float(pos.x()), float(pos.y()), float(size.x()), float(size.y()))
         except Exception:
             return None
 
-    def _get_current_roi_rect_display(self):
-        """Return the active ROI rectangle, or the first ROI for legacy callers."""
-        if self.active_roi is not None:
-            return self._get_roi_rect_display(self.active_roi)
-        rects = self._get_all_roi_rects_display()
-        return rects[0] if rects else None
-
-    def _get_all_roi_rects_display(self):
-        """Return all ROI rectangles in displayed image pixel coordinates."""
-        rects = []
-        for roi in self.rois:
-            rect = self._get_roi_rect_display(roi)
-            if rect is not None:
-                rects.append(rect)
-        return rects
-
-    def _display_rect_bounds(self, rect):
-        """Clip a display-space ROI rectangle to the displayed image bounds."""
-        if rect is None or self._display_shape is None:
-            return None
-        xd0, yd0, w, h = rect
-        if w <= 0 or h <= 0:
-            return None
-        H_disp, W_disp = self._display_shape
-        x0 = int(max(0, min(W_disp, xd0)))
-        y0 = int(max(0, min(H_disp, yd0)))
-        x1 = int(max(0, min(W_disp, xd0 + w)))
-        y1 = int(max(0, min(H_disp, yd0 + h)))
-        if x1 <= x0 or y1 <= y0:
-            return None
-        return x0, y0, x1, y1
-
-    def _display_bounds_to_original_bounds(self, bounds):
-        """Convert clipped display-space bounds to original raw-frame bounds."""
-        if bounds is None or self.last_raw_frame is None:
-            return None
-        x0, y0, x1, y1 = bounds
-        H_raw, W_raw = self.last_raw_frame.shape
-        if self.display_flip_x:
-            # Preserve the existing display->raw x conversion used for DMD masks.
-            xr0 = (W_raw - 1) - (x1 - 1)
-            xr1 = (W_raw - 1) - x0
-        else:
-            xr0, xr1 = x0, x1
-        xr0, xr1 = sorted((int(max(0, min(W_raw, xr0))), int(max(0, min(W_raw, xr1)))))
-        yr0, yr1 = sorted((int(max(0, min(H_raw, y0))), int(max(0, min(H_raw, y1)))))
-        if xr1 <= xr0 or yr1 <= yr0:
-            return None
-        return xr0, yr0, xr1, yr1
-
-    def _get_all_roi_rects_original(self):
-        """Return all ROI rectangles in original/raw camera frame pixel coordinates."""
-        rects = []
-        for rect in self._get_all_roi_rects_display():
-            bounds = self._display_rect_bounds(rect)
-            raw_bounds = self._display_bounds_to_original_bounds(bounds)
-            if raw_bounds is None:
-                continue
-            x0, y0, x1, y1 = raw_bounds
-            rects.append((x0, y0, x1 - x0, y1 - y0))
-        return rects
+    def _reset_roi(self):
+        if not hasattr(self, 'roi_rect') or self.roi_rect is None:
+            return
+        # Put ROI back to a small default area near the top-left
+        self.roi_rect.setPos((10, 10))
+        self.roi_rect.setSize((50, 50))
+        self._on_pg_roi_changed()
+        self.status_lbl.setText("ROI reset.")
 
     def _on_pg_roi_changed(self):
-        rects = self._get_all_roi_rects_display()
-        if not rects:
-            self.current_rect_label.setText("ROIs: -")
+        r = self._get_current_roi_rect_display()
+        if r is None:
+            self.current_rect_label.setText("ROI: -")
             return
-        active_idx = self._active_roi_index()
-        if self.active_roi is not None:
-            active = self._get_roi_rect_display(self.active_roi)
-            if active is not None:
-                x, y, w, h = active
-                self.current_rect_label.setText(
-                    f"ROIs: {len(rects)} | Active #{active_idx + 1}: x={int(x)}, y={int(y)}, w={int(w)}, h={int(h)}"
-                )
-            else:
-                self.current_rect_label.setText(f"ROIs: {len(rects)} | Active: -")
+        x, y, w, h = r
+        if w > 0 and h > 0:
+            self.current_rect_label.setText(f"ROI: x={int(x)}, y={int(y)}, w={int(w)}, h={int(h)}")
         else:
-            self.current_rect_label.setText(f"ROIs: {len(rects)} | Active: -")
+            self.current_rect_label.setText("ROI: -")
 
-    def _event_button_down_scene_pos(self, ev):
-        try:
-            return ev.buttonDownScenePos(Qt.LeftButton)
-        except TypeError:
-            return ev.buttonDownScenePos()
-        except Exception:
-            return ev.scenePos()
-
-    def _scene_pos_is_over_roi(self, scene_pos):
-        vb = self._get_viewbox()
-        if vb is None:
-            return False
-        try:
-            p = vb.mapSceneToView(scene_pos)
-        except Exception:
-            return False
-        x, y = p.x(), p.y()
-        for roi in self.rois:
-            rect = self._get_roi_rect_display(roi)
-            if rect is None:
-                continue
-            rx, ry, rw, rh = rect
-            if rx <= x <= rx + rw and ry <= y <= ry + rh:
-                return True
-        return False
-
-    def _call_original_viewbox_drag(self, ev, axis=None):
-        handler = self._viewbox_mouse_drag_event
-        if handler is None:
-            try:
-                ev.ignore()
-            except Exception:
-                pass
-            return
-        try:
-            return handler(ev, axis=axis)
-        except TypeError:
-            return handler(ev)
-
-    def _resize_drag_roi(self, scene_pos):
-        if self._roi_drag_item is None or self._roi_drag_origin is None:
-            return
-        vb = self._get_viewbox()
-        if vb is None:
-            return
-        p0 = vb.mapSceneToView(self._roi_drag_origin)
-        p1 = vb.mapSceneToView(scene_pos)
-        x0, y0 = p0.x(), p0.y()
-        x1, y1 = p1.x(), p1.y()
-        x = min(x0, x1); y = min(y0, y1)
-        w = max(1, abs(x1 - x0)); h = max(1, abs(y1 - y0))
-        self._roi_drag_item.setPos((x, y))
-        self._roi_drag_item.setSize((w, h))
-        self._on_pg_roi_changed()
-
-    def _on_viewbox_mouse_drag_event(self, ev, axis=None):
-        # ROI creation happens only for left-button drags on empty image space.
-        try:
-            if ev.button() != Qt.LeftButton:
-                return self._call_original_viewbox_drag(ev, axis)
-
-            if ev.isStart():
-                origin = self._event_button_down_scene_pos(ev)
-                if self._scene_pos_is_over_roi(origin):
-                    return self._call_original_viewbox_drag(ev, axis)
+    def _on_scene_mouse_clicked(self, ev):
+        # Start/end drag-to-create ROI on left button clicks.
+        if ev.button() == Qt.LeftButton:
+            # First click starts; second click ends.
+            if not self._roi_drag_active:
                 self._roi_drag_active = True
-                self._roi_drag_origin = origin
-                p0 = self._get_viewbox().mapSceneToView(origin)
-                self._roi_drag_item = self._add_roi(p0.x(), p0.y(), 1, 1)
-
-            if self._roi_drag_active:
-                self._resize_drag_roi(ev.scenePos())
+                self._roi_drag_origin = ev.scenePos()
                 ev.accept()
-                if ev.isFinish():
-                    self._roi_drag_active = False
-                    self._roi_drag_origin = None
-                    self._roi_drag_item = None
-                return
-        except Exception:
-            return self._call_original_viewbox_drag(ev, axis)
+            else:
+                self._roi_drag_active = False
+                self._roi_drag_origin = None
+                ev.accept()
 
-        return self._call_original_viewbox_drag(ev, axis)
-
-    @Slot()
-    def on_delete_roi(self):
-        if self.active_roi is None:
+    def _on_scene_mouse_moved(self, ev):
+        if not self._roi_drag_active or self._roi_drag_origin is None:
             return
-        self._remove_roi(self.active_roi)
-        self.status_lbl.setText("Active ROI deleted.")
-
+        # SignalProxy passes a tuple (pos,)
+        pos = ev[0]
+        try:
+            vb = self.imageview.getView()
+            p0 = vb.mapSceneToView(self._roi_drag_origin)
+            p1 = vb.mapSceneToView(pos)
+            x0, y0 = p0.x(), p0.y()
+            x1, y1 = p1.x(), p1.y()
+            x = min(x0, x1); y = min(y0, y1)
+            w = abs(x1 - x0); h = abs(y1 - y0)
+            # Avoid zero-size ROI
+            w = max(1, w); h = max(1, h)
+            self.roi_rect.setPos((x, y))
+            self.roi_rect.setSize((w, h))
+            self._on_pg_roi_changed()
+        except Exception:
+            pass
     @Slot()
     def on_clear_roi(self):
-        self._clear_rois()
-        self.status_lbl.setText("All ROIs cleared.")
+        self._reset_roi()
 
     def _compute_mask_from_current_roi(self):
         if self.last_raw_frame is None:
@@ -876,42 +679,41 @@ Details: {e}
             QMessageBox.warning(self, "ROI", "No displayed image available.")
             return None
 
-        # ROI coordinates are collected in ImageView (display) pixel coordinates.
-        rects = self._get_all_roi_rects_display()
-        if not rects:
-            QMessageBox.warning(self, "ROI", "Create/adjust at least one rectangular ROI first.")
+        # ROI coordinates are in ImageView (display) pixel coordinates
+        r = self._get_current_roi_rect_display()
+        if r is None:
+            QMessageBox.warning(self, "ROI", "Create/adjust the rectangular ROI first.")
+            return None
+        xd0, yd0, w, h = r
+        if w <= 0 or h <= 0:
+            QMessageBox.warning(self, "ROI", "ROI has zero area.")
+            return None
+
+        H_disp, W_disp = self._display_shape
+        x0 = int(max(0, min(W_disp, xd0)))
+        y0 = int(max(0, min(H_disp, yd0)))
+        x1 = int(max(0, min(W_disp, xd0 + w)))
+        y1 = int(max(0, min(H_disp, yd0 + h)))
+        if x1 <= x0 or y1 <= y0:
+            QMessageBox.warning(self, "ROI", "ROI is outside the image.")
             return None
 
         # Build a camera-space mask in the coordinate system expected by the affine.
         # Default: the affine is assumed to be calibrated in MainGui's displayed (fliplr) coordinates.
-        H_disp, W_disp = self._display_shape
-        used_roi = False
         if getattr(self, "affine_expects_display_coords", True):
             cam_mask = np.zeros((H_disp, W_disp), dtype=np.uint8)
-            for rect in rects:
-                bounds = self._display_rect_bounds(rect)
-                if bounds is None:
-                    continue
-                x0, y0, x1, y1 = bounds
-                cam_mask[y0:y1, x0:x1] = 255
-                used_roi = True
+            cam_mask[y0:y1, x0:x1] = 255
         else:
             # Convert display-x to raw-x if the affine was calibrated on raw/unflipped frames.
             # MainGui displays fliplr(raw), so: x_raw = (W-1) - x_disp.
             H_raw, W_raw = self.last_raw_frame.shape
             cam_mask = np.zeros((H_raw, W_raw), dtype=np.uint8)
-            for rect in rects:
-                bounds = self._display_rect_bounds(rect)
-                raw_bounds = self._display_bounds_to_original_bounds(bounds)
-                if raw_bounds is None:
-                    continue
-                xr0, yr0, xr1, yr1 = raw_bounds
+            xr0 = (W_raw - 1) - (x1 - 1)
+            xr1 = (W_raw - 1) - x0
+            xr0, xr1 = sorted((int(max(0, min(W_raw, xr0))), int(max(0, min(W_raw, xr1)))))
+            yr0, yr1 = sorted((int(max(0, min(H_raw, y0))), int(max(0, min(H_raw, y1)))))
+            if xr1 > xr0 and yr1 > yr0:
                 cam_mask[yr0:yr1, xr0:xr1] = 255
-                used_roi = True
-
-        if not used_roi:
-            QMessageBox.warning(self, "ROI", "All ROIs are outside the image or have zero area.")
-            return None
 
         if self.affine is not None and self.core is not None:
             try:
@@ -960,7 +762,7 @@ Details: {e}
     @Slot()
     def on_apply_mask(self):
         if self.slm_mask is None:
-            QMessageBox.warning(self,"DMD","No mask prepared. Click 'Make DMD Mask from ROIs' first."); return
+            QMessageBox.warning(self,"DMD","No mask prepared. Click 'Make DMD Mask from ROI' first."); return
         if self.core is None:
             QMessageBox.warning(self,"DMD","Core not initialized."); return
         try:
@@ -999,7 +801,7 @@ Details: {e}
     def _set_controls_enabled(self, enabled: bool):
         for w in [self.freq_hz, self.on_time_ms, self.duration_s, self.apply_mask_btn,
                   self.clear_dmd_btn, self.make_mask_btn, self.clear_roi_btn,
-                  self.delete_roi_btn, self.snap_btn, self.load_affine_btn, self.load_old_affine_btn,
+                  self.snap_btn, self.load_affine_btn, self.load_old_affine_btn,
                   self.connect_btn, self.port_edit]:
             w.setEnabled(enabled)
 
@@ -1083,7 +885,6 @@ Details: {e}
                 self.active_led.setStyleSheet(f"background-color: {color}; border-radius: {size//2}px; border: 1px solid #333;")
             if getattr(self, "active_lbl", None) is not None:
                 self.active_lbl.setStyleSheet("color: #D11;" if active else "color: #666;")
-    
     def closeEvent(self, event):
         """Ensure the DMD/SLM is left in a safe state and release hardware if we own the Core."""
         # Stop any running stimulation thread cleanly

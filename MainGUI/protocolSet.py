@@ -49,6 +49,10 @@ class ProtocolSet():
 
             if "use_roi" not in self.stages_table.columns:
                 self.stages_table["use_roi"] = False
+            if "dt" not in self.stages_table.columns:
+                self.stages_table["dt"] = 0.0
+            if "IPI" not in self.stages_table.columns:
+                self.stages_table["IPI"] = 0.0
 
             """Extract and set up the protocol from a DataFrame, initiated from a GUI."""
             self.headers = list(self.stages_table.columns)
@@ -84,7 +88,10 @@ class ProtocolSet():
             stage.background_freq = float(row['background_freq'])
             stage.on_time = int(row['on_time'])
             stage.background_on_time = 5
-            stage.stim_time = int(row['stim_time'])
+            stage.stim_time = float(row['stim_time'])
+            stage.dt = float(row.get('dt', 0.0))
+            stage.IPI = float(row.get('IPI', 0.0))
+            stage.Tmin = float(stage.stim_time)
             stage.cycle_time = stage.groups_period
             # set the recording flag from the boolean checkbox in the GUI 
             stage.recording = bool(row['record_stage'])

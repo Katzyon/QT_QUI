@@ -165,67 +165,19 @@ class ProtocolRunner(QThread):
                                 self.recorder.stop_recording()
                                 recording_started = False
                                 print("save Spontaneous stage completed.")
-                            continue             
+                            continue
 
-                        for seq_repeat in range(stage.sequence_repeats): # iterate over the number of repeats of the stage             
+                        if getattr(stage, "stim_type", None) == "STDP":
+                            if not self._run_stdp_stage(stage, stage_index):
+                                return
+                            print("Completed STDP stage:", stage_index + 1, "recording:", stage.recording)
+                            continue
 
-                            # use the sequence to create DMDArray of arduino_buffer size images (bound the Arduino buffer)
-                            # running over the sequence with chuncks (steps) of arduino_buffer size
-                            for i in range(0, len(sequence), arduino_buffer): # iterate over the length of arduino_buffer in the sequence
-                                current_display_indices = sequence[i:i+arduino_buffer] # get the indices of the groups to be displayed
-                                stage.create_DMDArray(current_display_indices) # create the DMDArray of images to be displayed on the DMD
-
-                                if self.plot:
-                                    if seq_repeat == 0 and i == 0:  # show only at the very first chunk of this stage
-                                        imgs = self._extract_preview_images(stage.DMDArray, max_n=18)
-                                        titles = [f"Stage {stage_index} | Img {k}" for k in range(len(imgs))]
-                                        if imgs:
-                                            self.plot_dmd.emit(imgs, titles)  # GUI thread will handle drawing
-
-                                # print the size of the java array DMDArray
-                                #print("DMDArray size:", stage.DMDArray.size())
-                                self.core.load_slm_sequence(self.dmd_name, stage.DMDArray) # load the sequence to the DMD
-                                self.msleep(len(current_display_indices)*4) # wait for the DMD to load the sequence - 4 ms per image
-                                
-
-                                if self.stop_event.is_set(): # User button pressed to stop the protocol
-                                    print("Aborting the run")
-                                    self.core.stop_slm_sequence(self.dmd_name)
-                                    QThread.sleep(0.1)
-                                    
-                                    # Check if the DMD is responding and display black image
-                                    try: # check if the DMD is responding
-                                        device_label = self.core.get_property(self.dmd_name, "Label")
-                                        print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")    
-                                        self.core.set_slm_image(self.dmd_name, self.black_image) # display black image
-                                        self.core.display_slm_image(self.dmd_name) # display black image
-                                    except Exception as e:
-                                        # If an exception occurs, communication is likely disrupted
-                                        print(f"Communication failed for device '{self.dmd_name}'. Error: {e}")         
-                                    return
-
-                                # Use Arduino to trigger the presentation of the images
-                                arduino_display_indices = [x + 1 for x in sequence[i:i+arduino_buffer]] # adds 1 to the groups due to issues with Arduino encoding zeros digipins                                
-                                # message = f"{arduino_display_indices},{self.stages[stage_index].groups_period},{self.stages[stage_index].on_time}\n"
-                                # self.arduino.write(message.encode()) # Length of message is limited due to Arduino buffer overflow - ~19 numbers
-                                # print(f"Message sent to Arduino: {message.strip()}") # uncheck to validate the message sent to Arduino
-                            
-                                self.core.start_slm_sequence(self.dmd_name) # start the sequence in external trigger mode needs TTL input (to Polygon and LED) to display the images
-                                self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time) # Upload the sequence part to Arduino and trigger the display of the images
-                                response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event) # wait for the Arduino to finish the sequence
-
-                                if response: # for test purposes - validate the response from Arduino
-                                    #print(f"Arduino response: {response}")
-                                    #print(f"num. presents {i}, of: {len(sequence)} completed by Arduino.")
-                                    pass
-                                else:
-                                    print("Arduino wait exited (stopped or error).")
-                                    break
-                            # sequence cuts loop ends here
-
-                            # at the end of each sequence:
-                            self.core.stop_slm_sequence(self.dmd_name) # stop the sequence  - findout where to put it !!!!!!       
-                            print(f"Sequence repeat {seq_repeat + 1}, out of: {self.stages[stage_index].sequence_repeats} completed by Arduino.")  
+                        for seq_repeat in range(stage.sequence_repeats):
+                            if not self._run_standard_stage_chunked(stage, stage_index, seq_repeat, sequence, arduino_buffer):
+                                return
+                            self.core.stop_slm_sequence(self.dmd_name)
+                            print(f"Sequence repeat {seq_repeat + 1}, out of: {stage.sequence_repeats} completed by Arduino.")
 
                         # seq_repeat loop ends here
                         print("Completed stage:", stage_index + 1, "recording:", stage.recording)
@@ -287,6 +239,89 @@ class ProtocolRunner(QThread):
     def stop(self):
         print("Trying to abort the protocol")
         self.stop_event.set() # send the signal to stop the protocol run - stop the qthread of runProtocol.
+
+    def _run_standard_stage_chunked(self, stage, stage_index, seq_repeat, sequence, arduino_buffer):
+        for i in range(0, len(sequence), arduino_buffer):
+            current_display_indices = sequence[i:i+arduino_buffer]
+            stage.create_DMDArray(current_display_indices)
+
+            if self.plot and seq_repeat == 0 and i == 0:
+                imgs = self._extract_preview_images(stage.DMDArray, max_n=18)
+                titles = [f"Stage {stage_index} | Img {k}" for k in range(len(imgs))]
+                if imgs:
+                    self.plot_dmd.emit(imgs, titles)
+
+            self.core.load_slm_sequence(self.dmd_name, stage.DMDArray)
+            self.msleep(len(current_display_indices) * 4)
+
+            if self._abort_if_stopped():
+                return False
+
+            arduino_display_indices = [x + 1 for x in current_display_indices]
+            self.core.start_slm_sequence(self.dmd_name)
+            self.arduino_comm.send_message(arduino_display_indices, stage.groups_period, stage.on_time)
+            response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event)
+
+            if not response:
+                print("Arduino wait exited (stopped or error).")
+                return False
+
+        return True
+
+    def _run_stdp_stage(self, stage, stage_index):
+        if len(stage.sequence) == 0:
+            raise ValueError("STDP stage sequence is empty.")
+
+        stage.create_DMDArray(stage.sequence)
+
+        if self.plot:
+            imgs = self._extract_preview_images(stage.DMDArray, max_n=18)
+            titles = [f"Stage {stage_index} | Img {k}" for k in range(len(imgs))]
+            if imgs:
+                self.plot_dmd.emit(imgs, titles)
+
+        self.core.load_slm_sequence(self.dmd_name, stage.DMDArray)
+        self.msleep(len(stage.sequence) * 4)
+
+        if self._abort_if_stopped():
+            return False
+
+        self.core.start_slm_sequence(self.dmd_name)
+        self.arduino_comm.send_stdp_message(
+            dt=stage.dt,
+            IPI=stage.IPI,
+            Tmin=stage.Tmin,
+            on_time=stage.on_time,
+        )
+        response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event)
+        self.core.stop_slm_sequence(self.dmd_name)
+
+        if not response:
+            print("Arduino wait exited during STDP stage (stopped or error).")
+            return False
+
+        print(
+            f"STDP stage finished with {len(stage.sequence)} Polygon frames "
+            f"({len(stage.sequence) // 2} stimulation pairs)."
+        )
+        return True
+
+    def _abort_if_stopped(self):
+        if not self.stop_event.is_set():
+            return False
+
+        print("Aborting the run")
+        self.core.stop_slm_sequence(self.dmd_name)
+        QThread.sleep(0.1)
+
+        try:
+            device_label = self.core.get_property(self.dmd_name, "Label")
+            print(f"Communication active: Device '{self.dmd_name}' responded with Label='{device_label}'.")
+            self.core.set_slm_image(self.dmd_name, self.black_image)
+            self.core.display_slm_image(self.dmd_name)
+        except Exception as e:
+            print(f"Communication failed for device '{self.dmd_name}'. Error: {e}")
+        return True
 
     def randomizeSequence(self, javaSequence):
         # randomize the sequence of images

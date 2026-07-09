@@ -274,6 +274,11 @@
         <string>Squares</string>
        </property>
       </item>
+      <item>
+       <property name="text">
+        <string>STDP</string>
+       </property>
+      </item>
      </widget>
     </item>
     <item row="0" column="2">
@@ -374,6 +379,36 @@
       <property name="text">
        <string>Record 
  raw data</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="15">
+     <widget class="QLabel" name="label_19">
+      <property name="text">
+       <string>STDP dt
+ (ms)</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="15">
+     <widget class="QLineEdit" name="stdp_dt">
+      <property name="text">
+       <string>10</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="16">
+     <widget class="QLabel" name="label_20">
+      <property name="text">
+       <string>STDP IPI
+ (ms)</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="16">
+     <widget class="QLineEdit" name="stdp_ipi">
+      <property name="text">
+       <string>400</string>
       </property>
      </widget>
     </item>

@@ -27,6 +27,9 @@ class Stage: # called by protocolSet.py
         #self.groupFreq = float() # stimulation frequency in Hz for each group (whole sequence cycle)
         self.groups_period = int() # time of one run of all groups. The average time between same group stimulation in ms (when probability stimulation is similar to groups)
         self.on_time = int() # DMD on time in ms for each stimulation
+        self.dt = float() # STDP interval between event 1 and event 2 within a pair, in ms
+        self.IPI = float() # STDP inter-pair interval, in ms
+        self.Tmin = float() # STDP total duration, in minutes
         self.background_freq = float() # DMD background frequency in Hz
         self.background_on_time = int() # DMD on time in ms - not in use (?)
         self.sequence = [] # list of each group indices of the cells to be stimulated in a sequence
@@ -34,7 +37,7 @@ class Stage: # called by protocolSet.py
         self.sequences_images = [] # list of images to be displayed in each sequence
         self.inter_mask_interval = float() # ms time between each mask in a sequence
         self.sequence_repeats = int()
-        self.stim_time = int() # stimulation time for running the protocol in minutes - the whole duration of the stage
+        self.stim_time = float() # stimulation time for running the protocol in minutes - the whole duration of the stage
         self.cycle_time = float() # The 
         self.image_repeats = int()
         self.manual_groups = [] # list of manually selected groups
@@ -85,7 +88,19 @@ class Stage: # called by protocolSet.py
         
 
     def calc_interMaskInterval(self):
-        
+        if self.stim_type == "STDP":
+            self.inter_mask_interval = max(0.0, float(getattr(self, "IPI", 0.0)) - float(getattr(self, "on_time", 0.0)))
+            self.cycle_time = float(getattr(self, "stim_time", 0.0)) * 60.0
+            self.sequence_repeats = 1
+            print(
+                "STDP timing:",
+                "dt(ms)=", getattr(self, "dt", None),
+                "| IPI(ms)=", getattr(self, "IPI", None),
+                "| Tmin(min)=", getattr(self, "Tmin", None),
+                "| sequence length=", len(getattr(self, "sequence", [])),
+            )
+            return
+
         if self.stim_type == "Spontaneous" or len(getattr(self, "sequence", [])) == 0:
             self.inter_mask_interval = 0
             self.cycle_time = 0
@@ -156,6 +171,9 @@ class Stage: # called by protocolSet.py
         if self.stim_type == 'Random':
             cs.create_random_sequence(self) # create_sequence in the Potocol object stage (create_sequence.py)
 
+        elif self.stim_type == 'STDP':
+            cs.create_stdp_sequence(self)
+
         elif self.stim_type == 'Order': # create repeated stimulation according to the order of the groups
 
             if getattr(self, "use_roi", False):
@@ -191,7 +209,7 @@ class Stage: # called by protocolSet.py
         elif self.stim_type == 'Spontaneous': # No stimulation - just waiting time
             pass
         else:
-            print(f"Error: Unsupported stimulation type '{self.stim_type}'. Please use 'Random' or 'Sequential'.")
+            print(f"Error: Unsupported stimulation type '{self.stim_type}'. Please use 'Random', 'Order', 'STDP', or another supported mode.")
 
 
 

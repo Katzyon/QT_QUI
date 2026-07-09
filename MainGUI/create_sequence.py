@@ -6,6 +6,66 @@ import matplotlib.pyplot as plt
 import cv2
 import os
  
+def _build_group_images(stage, groups=None):
+    if groups is None:
+        groups = stage.groups
+
+    stage.groups_images = []
+    for group in groups:
+        group_images = []
+        for cell in group:
+            group_images.append(stage.images[cell - 1])
+        stage.groups_images.append(sum(group_images))
+
+
+def create_stdp_sequence(stage):
+    """Create a long alternating Polygon sequence for two-event STDP stimulation."""
+    from math import ceil
+
+    available_cells = stage.input_cells.copy()
+    for cell in stage.output_group:
+        if cell in available_cells:
+            available_cells.remove(cell)
+
+    if stage.is_manual:
+        if len(stage.groups) != 2:
+            raise ValueError("STDP protocol requires exactly two manual groups.")
+    else:
+        if int(stage.groups_number) != 2:
+            raise ValueError("STDP protocol requires exactly two groups.")
+        if stage.group_size * 2 > len(available_cells):
+            raise ValueError("Not enough cells to create two non-overlapping STDP groups.")
+
+        stage.groups = []
+        for _ in range(2):
+            group = random.sample(available_cells, stage.group_size)
+            stage.groups.append(group)
+            for cell in group:
+                available_cells.remove(cell)
+
+    _build_group_images(stage)
+
+    if len(stage.groups_images) != 2:
+        raise ValueError("STDP protocol requires exactly two group images.")
+
+    total_duration_ms = float(stage.stim_time) * 60.0 * 1000.0
+    if float(stage.IPI) <= 0:
+        raise ValueError("STDP IPI must be positive.")
+
+    n_pairs = max(1, ceil(total_duration_ms / float(stage.IPI)))
+    stage.sequence = [0, 1] * n_pairs
+    stage.sequence_repeats = 1
+    stage.Tmin = float(stage.stim_time)
+
+    print(
+        "create_stdp_sequence:",
+        "pairs=", n_pairs,
+        "| total frames=", len(stage.sequence),
+        "| dt(ms)=", stage.dt,
+        "| IPI(ms)=", stage.IPI,
+        "| Tmin(min)=", stage.Tmin,
+    )
+
 
 def create_random_sequence(stage): # called by protocolSet.py via Protocol object to create the sequence of images to be displayed on the DMD
     # get Protocol object and randomly group the indices according to its parameters:
@@ -89,14 +149,7 @@ def create_random_sequence(stage): # called by protocolSet.py via Protocol objec
     # create masks for all the groups
     all_groups = stage.groups + smaller_groups
 
-    for group in all_groups: # group is a list of cells either of size 1 or larger
-        group_images = []
-        for cell in group: # [1, 3, 11] - list of cells in the group
-            group_images.append(stage.images[cell - 1])
-
-        # sum the images in the group
-        group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
-        stage.groups_images.append(group_sum) # add one image to the sequence
+    _build_group_images(stage, all_groups)
 
     #present the distribution of the groups in the sequence !!!! check the output thouroughly
 
@@ -154,16 +207,7 @@ def create_order_sequence(stage):
     print("number of groups:", stage.groups_number, "|  group period (ms):", stage.groups_period, "|  stim_time (min):", stage.stim_time)
     
     print("manual groups:", stage.groups)
-    for group in stage.groups: # group is a list of cells either of size 1 or larger
-        #print("group:", group)
-        group_images = []
-        for cell in group: # [1, 3, 11] - list of cells in the group
-            group_images.append(stage.images[cell - 1])
-
-        # sum the images in the group
-        group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
-        stage.groups_images.append(group_sum) # add one image to the sequence
-        #print("group image shape:", group_sum.shape)
+    _build_group_images(stage)
         
 
 def create_decay_probabilities(groupsNumber, group_probability_ratio):
@@ -212,14 +256,7 @@ def create_test_sequence(stage):
     
     stage.sequence = np.repeat(stage.groups_number, stage.group_distribution_number).tolist() # create a sequence of the groups, each accoring its probabigroup_probabilities
 
-    for group in stage.groups: # group is a list of cells either of size 1 or larger
-        group_images = []
-        for cell in group: # [1, 3, 11] - list of cells in the group
-            group_images.append(stage.images[cell - 1])
-
-        # sum the images in the group
-        group_sum = sum(group_images) # sum the images in the group - is stimulation to a group of cells
-        stage.groups_images.append(group_sum) # add one image to the sequence
+    _build_group_images(stage)
 
 
 def create_squares_sequence(stage):

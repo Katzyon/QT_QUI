@@ -31,6 +31,18 @@ class ArduinoComm:
 
         return self._wait_for_ack()
 
+    def send_stdp_message(self, dt, IPI, Tmin, on_time):
+        """Send a paired-STDP protocol command as 'dt,IPI,Tmin,on_time\\n'."""
+        message = f"{dt},{IPI},{Tmin},{on_time}\n"
+
+        if len(message.encode()) > 62:
+            raise ValueError("STDP message too long for Arduino serial buffer (max ~62 bytes)")
+
+        self.arduino.reset_input_buffer()
+        self.arduino.write(message.encode())
+
+        return self._wait_for_ack()
+
     def _wait_for_ack(self):
         start = time.time()
         while time.time() - start < self.timeout:

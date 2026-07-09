@@ -88,6 +88,8 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
             "groups_number": self.groups_number.text(),  # number of groups
             "stim_time": self.stim_time.text(),
             "on_time": self.on_time.text(),  # onTime
+            "dt": self.stdp_dt.text(),
+            "IPI": self.stdp_ipi.text(),
             "is_manual_sequence": self.is_manual_sequence.isChecked(),
             "prob_stim": self.prob_stim.isChecked(),
             "record_stage": self.record_stage.isChecked(),
@@ -226,8 +228,9 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
 
         
 
-# create instance of protocol_set
+# create instance of protocol_set 
 # app = QApplication([])
 # window = protocol_set()
 # window.show()
 # app.exec()
+

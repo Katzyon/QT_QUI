@@ -148,6 +148,7 @@ class Ui_protocols(object):
         self.stim_type.addItem("")
         self.stim_type.addItem("")
         self.stim_type.addItem("")
+        self.stim_type.addItem("")
         self.coreSettingsLayout.addWidget(self.stim_type, 0, 1)
 
         self.label_13 = QLabel(self.coreSettingsBox)
@@ -189,6 +190,22 @@ class Ui_protocols(object):
         self.prob_stim = QCheckBox(self.coreSettingsBox)
         self.prob_stim.setObjectName(u"prob_stim")
         self.coreSettingsLayout.addWidget(self.prob_stim, 2, 3)
+
+        self.label_19 = QLabel(self.coreSettingsBox)
+        self.label_19.setObjectName(u"label_19")
+        self.coreSettingsLayout.addWidget(self.label_19, 3, 0)
+
+        self.stdp_dt = QLineEdit(self.coreSettingsBox)
+        self.stdp_dt.setObjectName(u"stdp_dt")
+        self.coreSettingsLayout.addWidget(self.stdp_dt, 3, 1)
+
+        self.label_20 = QLabel(self.coreSettingsBox)
+        self.label_20.setObjectName(u"label_20")
+        self.coreSettingsLayout.addWidget(self.label_20, 3, 2)
+
+        self.stdp_ipi = QLineEdit(self.coreSettingsBox)
+        self.stdp_ipi.setObjectName(u"stdp_ipi")
+        self.coreSettingsLayout.addWidget(self.stdp_ipi, 3, 3)
 
         self.controlsColumn.addWidget(self.coreSettingsBox)
 
@@ -402,6 +419,7 @@ class Ui_protocols(object):
         self.stim_type.setItemText(3, QCoreApplication.translate("protocols", u"Test", None))
         self.stim_type.setItemText(4, QCoreApplication.translate("protocols", u"Spontaneous", None))
         self.stim_type.setItemText(5, QCoreApplication.translate("protocols", u"Squares", None))
+        self.stim_type.setItemText(6, QCoreApplication.translate("protocols", u"STDP", None))
         self.label_13.setText(QCoreApplication.translate("protocols", u"Light ON time (ms)", None))
         self.on_time.setText(QCoreApplication.translate("protocols", u"5", None))
         self.label_11.setText(QCoreApplication.translate("protocols", u"Background stimulation (Hz)", None))
@@ -412,6 +430,10 @@ class Ui_protocols(object):
         self.jitter.setText(QCoreApplication.translate("protocols", u"Enabled", None))
         self.label_15.setText(QCoreApplication.translate("protocols", u"Probability stimulation", None))
         self.prob_stim.setText(QCoreApplication.translate("protocols", u"Enabled", None))
+        self.label_19.setText(QCoreApplication.translate("protocols", u"STDP dt (ms)", None))
+        self.stdp_dt.setText(QCoreApplication.translate("protocols", u"10", None))
+        self.label_20.setText(QCoreApplication.translate("protocols", u"STDP IPI (ms)", None))
+        self.stdp_ipi.setText(QCoreApplication.translate("protocols", u"400", None))
 
         self.groupSettingsBox.setTitle(QCoreApplication.translate("protocols", u"Grouping", None))
         self.label_6.setText(QCoreApplication.translate("protocols", u"Groups period (ms)", None))

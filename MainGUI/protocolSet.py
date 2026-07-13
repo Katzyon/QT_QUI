@@ -35,6 +35,7 @@ class ProtocolSet():
             self.current_protocol_dir = gui.culture.current_protocol_dir # current protocol directory
             self.protocols_number = gui.culture.protocols_number # number of the current protocol
             self.repeats = gui.n_protocol_repeats
+            self.roi_directory = getattr(gui, "ROI_dir", None)
             
             print("init protocol set", self.current_protocol_dir)
 
@@ -53,6 +54,8 @@ class ProtocolSet():
                 self.stages_table["dt"] = 0.0
             if "IPI" not in self.stages_table.columns:
                 self.stages_table["IPI"] = 0.0
+            if "stim_type" in self.stages_table.columns:
+                self.stages_table["stim_type"] = self.stages_table["stim_type"].replace({"DTSP": "STDP"})
 
             """Extract and set up the protocol from a DataFrame, initiated from a GUI."""
             self.headers = list(self.stages_table.columns)
@@ -77,7 +80,8 @@ class ProtocolSet():
             stage.number = index + 1
 
             # Set attributes from the row
-            stage.stim_type = row['stim_type']
+            stage.stim_type = str(row['stim_type']).replace('DTSP', 'STDP')
+
             stage.group_size = int(row['group_size'])
             stage.groups_number = int(row['groups_number'])
             stage.number_cells = self.number_cells
@@ -98,8 +102,49 @@ class ProtocolSet():
             stage.raw_recording = bool(row.get("raw_recording", False)) # whether to enable raw-trace recording for this stage (if False, only maxlab spikes will be recorded)
             stage.use_roi = bool(row.get("use_roi", False))
             stage.roi_mask_path = getattr(self, "roi_mask_path", None)
-            if stage.use_roi and not stage.roi_mask_path:
-                raise FileNotFoundError("Stage requests ROI, but MainGUI has no roi_mask_path. Create ROI mask first.")
+
+            if stage.stim_type == "STDP":
+                if not self.roi_directory:
+                    raise FileNotFoundError(
+                        "ROI directory is not defined."
+                    )
+
+                stage.stdp_mask_1_path = os.path.join(
+                    self.roi_directory,
+                    "stdp_roi1_mask.bmp",
+                )
+
+                stage.stdp_mask_2_path = os.path.join(
+                    self.roi_directory,
+                    "stdp_roi2_mask.bmp",
+                )
+
+                stage.use_stdp_masks = bool(row.get("use_roi", False))
+
+
+
+            if stage.use_roi:
+                if stage.stim_type == "STDP":
+                    missing = [
+                        path
+                        for path in (
+                            stage.stdp_mask_1_path,
+                            stage.stdp_mask_2_path,
+                        )
+                        if not path or not os.path.isfile(path)
+                    ]
+
+                    if missing:
+                        raise FileNotFoundError(
+                            "STDP mask files are missing. "
+                            "Create the STDP masks in Simple DMD Stim first.\n"
+                            + "\n".join(missing)
+                        )
+
+                elif not stage.roi_mask_path or not os.path.isfile(stage.roi_mask_path):
+                    raise FileNotFoundError(
+                        "ROI mask file is missing."
+                    )
 
 
 

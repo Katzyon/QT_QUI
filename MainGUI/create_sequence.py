@@ -19,53 +19,111 @@ def _build_group_images(stage, groups=None):
 
 
 def create_stdp_sequence(stage):
-    """Create a long alternating Polygon sequence for two-event STDP stimulation."""
+    """Create an STDP sequence from Simple GUI masks or cell groups."""
     from math import ceil
 
-    available_cells = stage.input_cells.copy()
-    for cell in stage.output_group:
-        if cell in available_cells:
-            available_cells.remove(cell)
+    if getattr(stage, "use_stdp_masks", False):
+        mask_1 = cv2.imread(
+            stage.stdp_mask_1_path,
+            cv2.IMREAD_GRAYSCALE,
+        )
 
-    if stage.is_manual:
-        if len(stage.groups) != 2:
-            raise ValueError("STDP protocol requires exactly two manual groups.")
-    else:
-        if int(stage.groups_number) != 2:
-            raise ValueError("STDP protocol requires exactly two groups.")
-        if stage.group_size * 2 > len(available_cells):
-            raise ValueError("Not enough cells to create two non-overlapping STDP groups.")
+        mask_2 = cv2.imread(
+            stage.stdp_mask_2_path,
+            cv2.IMREAD_GRAYSCALE,
+        )
+
+        if mask_1 is None:
+            raise ValueError(
+                f"Failed to load STDP mask 1: "
+                f"{stage.stdp_mask_1_path}"
+            )
+
+        if mask_2 is None:
+            raise ValueError(
+                f"Failed to load STDP mask 2: "
+                f"{stage.stdp_mask_2_path}"
+            )
+
+        if mask_1.shape != mask_2.shape:
+            raise ValueError(
+                "STDP masks have different dimensions: "
+                f"{mask_1.shape} and {mask_2.shape}"
+            )
+
+        mask_1 = np.where(mask_1 > 0, 255, 0).astype(np.uint8)
+        mask_2 = np.where(mask_2 > 0, 255, 0).astype(np.uint8)
+
+        stage.groups_images = [
+            np.ascontiguousarray(mask_1),
+            np.ascontiguousarray(mask_2),
+        ]
 
         stage.groups = []
-        for _ in range(2):
-            group = random.sample(available_cells, stage.group_size)
-            stage.groups.append(group)
-            for cell in group:
+        stage.groups_number = 2
+
+    else:
+        available_cells = stage.input_cells.copy()
+
+        for cell in stage.output_group:
+            if cell in available_cells:
                 available_cells.remove(cell)
 
-    _build_group_images(stage)
+        if stage.is_manual:
+            if len(stage.groups) != 2:
+                raise ValueError(
+                    "STDP requires exactly two manual groups."
+                )
+        else:
+            if stage.group_size * 2 > len(available_cells):
+                raise ValueError(
+                    "Not enough cells for two STDP groups."
+                )
+
+            stage.groups = []
+
+            for _ in range(2):
+                group = random.sample(
+                    available_cells,
+                    stage.group_size,
+                )
+
+                stage.groups.append(group)
+
+                for cell in group:
+                    available_cells.remove(cell)
+
+        _build_group_images(stage)
 
     if len(stage.groups_images) != 2:
-        raise ValueError("STDP protocol requires exactly two group images.")
+        raise ValueError(
+            "STDP requires exactly two DMD images."
+        )
 
-    total_duration_ms = float(stage.stim_time) * 60.0 * 1000.0
     if float(stage.IPI) <= 0:
-        raise ValueError("STDP IPI must be positive.")
+        raise ValueError(
+            "STDP IPI must be positive."
+        )
 
-    n_pairs = max(1, ceil(total_duration_ms / float(stage.IPI)))
+    total_duration_ms = float(stage.stim_time) * 60_000.0
+
+    n_pairs = max(
+        1,
+        ceil(total_duration_ms / float(stage.IPI)),
+    )
+
+    stage.n_stdp_pairs = n_pairs    
     stage.sequence = [0, 1] * n_pairs
     stage.sequence_repeats = 1
     stage.Tmin = float(stage.stim_time)
+    stage.actual_stim_time_s = n_pairs * float(stage.IPI) / 1000.0
 
     print(
-        "create_stdp_sequence:",
-        "pairs=", n_pairs,
-        "| total frames=", len(stage.sequence),
-        "| dt(ms)=", stage.dt,
-        "| IPI(ms)=", stage.IPI,
-        "| Tmin(min)=", stage.Tmin,
+        "STDP sequence created:",
+        "ROI masks =", stage.use_stdp_masks,
+        "| pairs =", stage.n_stdp_pairs,
+        "| images =", len(stage.groups_images),
     )
-
 
 def create_random_sequence(stage): # called by protocolSet.py via Protocol object to create the sequence of images to be displayed on the DMD
     # get Protocol object and randomly group the indices according to its parameters:

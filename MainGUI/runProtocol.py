@@ -167,7 +167,7 @@ class ProtocolRunner(QThread):
                                 print("save Spontaneous stage completed.")
                             continue
 
-                        if getattr(stage, "stim_type", None) == "STDP":
+                        if str(getattr(stage, "stim_type", None)).upper() in {"STDP", "DTSP"}:
                             if not self._run_stdp_stage(stage, stage_index):
                                 return
                             print("Completed STDP stage:", stage_index + 1, "recording:", stage.recording)
@@ -269,42 +269,102 @@ class ProtocolRunner(QThread):
         return True
 
     def _run_stdp_stage(self, stage, stage_index):
-        if len(stage.sequence) == 0:
-            raise ValueError("STDP stage sequence is empty.")
+        sequence = list(stage.sequence)
 
-        stage.create_DMDArray(stage.sequence)
+        if not sequence:
+            raise ValueError("STDP sequence is empty.")
 
-        if self.plot:
-            imgs = self._extract_preview_images(stage.DMDArray, max_n=18)
-            titles = [f"Stage {stage_index} | Img {k}" for k in range(len(imgs))]
-            if imgs:
-                self.plot_dmd.emit(imgs, titles)
+        if len(sequence) % 2 != 0:
+            raise ValueError(
+                "STDP sequence must contain an even number of frames."
+            )
 
-        self.core.load_slm_sequence(self.dmd_name, stage.DMDArray)
-        self.msleep(len(stage.sequence) * 4)
+        n_pairs = len(sequence) // 2
 
-        if self._abort_if_stopped():
-            return False
+        if sequence != [0, 1] * n_pairs:
+            raise ValueError(
+                "STDP sequence must alternate [0, 1, 0, 1, ...]."
+            )
 
-        self.core.start_slm_sequence(self.dmd_name)
-        self.arduino_comm.send_stdp_message(
-            dt=stage.dt,
-            IPI=stage.IPI,
-            Tmin=stage.Tmin,
-            on_time=stage.on_time,
-        )
-        response = self.arduino_comm.wait_for_sequence_end_blocking(stop_event=self.stop_event)
-        self.core.stop_slm_sequence(self.dmd_name)
+        # Preserve pair boundaries. With ard_buffer=18 this gives 9 pairs.
+        pairs_per_chunk = max(1, int(stage.ard_buffer) // 2)
 
-        if not response:
-            print("Arduino wait exited during STDP stage (stopped or error).")
-            return False
+        period_ms = max(1, int(round(float(stage.IPI))))
+        on_time_ms = max(1, int(round(float(stage.on_time))))
+        dt_ms = max(1, int(round(float(stage.dt))))
+
+        completed_pairs = 0
+
+        while completed_pairs < n_pairs:
+            if self._abort_if_stopped():
+                return False
+
+            pair_count = min(
+                pairs_per_chunk,
+                n_pairs - completed_pairs,
+            )
+
+            chunk_sequence = [0, 1] * pair_count
+
+            stage.create_DMDArray(chunk_sequence)
+
+            if self.plot and completed_pairs == 0:
+                imgs = self._extract_preview_images(
+                    stage.DMDArray,
+                    max_n=18,
+                )
+                titles = [
+                    f"Stage {stage_index} | Frame {i}"
+                    for i in range(len(imgs))
+                ]
+                if imgs:
+                    self.plot_dmd.emit(imgs, titles)
+
+            self.core.load_slm_sequence(
+                self.dmd_name,
+                stage.DMDArray,
+            )
+
+            self.msleep(len(chunk_sequence) * 4)
+
+            self.core.start_slm_sequence(self.dmd_name)
+
+            acknowledged = self.arduino_comm.send_stdp_message(
+                period_ms=period_ms,
+                on_time_ms=on_time_ms,
+                isi_ms=dt_ms,
+                pair_count=pair_count,
+            )
+
+            if not acknowledged:
+                self.core.stop_slm_sequence(self.dmd_name)
+                raise RuntimeError(
+                    "Arduino did not acknowledge STDP command."
+                )
+
+            response = (
+                self.arduino_comm.wait_for_sequence_end_blocking(
+                    stop_event=self.stop_event
+                )
+            )
+
+            self.core.stop_slm_sequence(self.dmd_name)
+
+            if not response:
+                print("STDP Arduino playback stopped or failed.")
+                return False
+
+            completed_pairs += pair_count
 
         print(
-            f"STDP stage finished with {len(stage.sequence)} Polygon frames "
-            f"({len(stage.sequence) // 2} stimulation pairs)."
+            f"STDP completed: {completed_pairs} pairs, "
+            f"{completed_pairs * 2} DMD frames."
         )
+
         return True
+
+
+
 
     def _abort_if_stopped(self):
         if not self.stop_event.is_set():

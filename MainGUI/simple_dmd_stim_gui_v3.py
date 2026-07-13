@@ -68,7 +68,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, QRect, QSize, QPoint, QThread, Signal, Slot
 from PySide6.QtGui import QImage, QPixmap, QAction
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
+    QApplication, QMainWindow, QSizePolicy, QWidget, QLabel, QPushButton, QFileDialog,
     QHBoxLayout, QVBoxLayout, QGridLayout, QGroupBox, QLineEdit, QSpinBox,
     QDoubleSpinBox, QMessageBox, QStatusBar, QRubberBand, QProgressBar,
     QCheckBox, QComboBox
@@ -78,7 +78,7 @@ from pycromanager import Core
 
 
 import Camera
-from arduino_comm import ArduinoComm
+from arduino_comm import ArduinoComm, build_stdp_message_payload
 
 def np_to_qimage_u8gray(arr: np.ndarray) -> QImage:
     arr = np.ascontiguousarray(arr)
@@ -147,12 +147,25 @@ class StimWorker(QThread):
     progress = Signal(int)           # total pulses delivered so far
     finished = Signal(bool, str)     # ok, message
 
-    def __init__(self, arduino_comm: ArduinoComm, period_ms: int, on_time_ms: int, total_pulses: int, parent=None):
+    def __init__(
+        self,
+        arduino_comm: ArduinoComm,
+        period_ms: int,
+        on_time_ms: int,
+        total_pulses: int,
+        parent=None,
+        use_stdp: bool = False,
+        stdp_distance_px: float = 100.0,
+        duration_s: float = 5.0,
+    ):
         super().__init__(parent)
         self.arduino = arduino_comm
         self.period_ms = int(period_ms)
         self.on_time_ms = int(on_time_ms)
         self.total = max(0, int(total_pulses))
+        self.use_stdp = bool(use_stdp)
+        self.stdp_distance_px = float(stdp_distance_px)
+        self.duration_s = float(duration_s)
         self._stop = False
         self._stop_event = threading.Event()
 
@@ -169,6 +182,42 @@ class StimWorker(QThread):
     def run(self):
         if self.arduino is None:
             self.finished.emit(False, "Arduino not connected")
+            return
+
+        if self.use_stdp:
+            try:
+                # For STDP 4-field mode: [0,1],period_ms,on_time_ms,ISI_ms
+                # ISI (inter-stimulus interval) is derived from stdp_distance_px
+                isi_ms = int(min(1000, max(1, round(self.stdp_distance_px))))
+                period_ms_stdp, on_ms_stdp, isi_ms_stdp = build_stdp_message_payload(
+                    self.period_ms,
+                    self.on_time_ms,
+                    isi_ms
+                )
+                ok = self.arduino.send_stdp_message(period_ms_stdp, on_ms_stdp, isi_ms_stdp)
+                if not ok:
+                    self.finished.emit(False, "Arduino did not acknowledge STDP message.")
+                    return
+
+                # Wait for Arduino to complete, but respect duration_s timeout
+                # Add 2s buffer to allow Arduino time to finish cleanly
+                timeout_s = self.duration_s + 2.0
+                start_time = time.time()
+                
+                while time.time() - start_time < timeout_s and not self._stop:
+                    resp = self.arduino.wait_for_sequence_end_blocking(self._stop_event)
+                    if resp is not None:
+                        # Arduino signaled completion before timeout
+                        self.progress.emit(self.total)
+                        self.finished.emit(True, f"STDP protocol completed ({self.total} pulses equivalent).")
+                        return
+                
+                # Timeout reached or user stopped during desired duration
+                self.progress.emit(self.total)
+                elapsed = time.time() - start_time
+                self.finished.emit(True, f"STDP protocol stopped after {elapsed:.1f}s (duration: {self.duration_s}s).")
+            except Exception as e:
+                self.finished.emit(False, f"Error: {e}")
             return
 
         max_indices = self._max_indices_for_message()
@@ -226,7 +275,8 @@ class SimpleStimWindow(QMainWindow):
     ):
         super().__init__()
         self.setWindowTitle("Simple DMD Stim v3 (PySide6)")
-        self.resize(1320, 800)
+        self.resize(1520, 800) # Set the GUI size
+
 
         # Optional integration points
         self.host_gui = host_gui
@@ -391,6 +441,10 @@ class SimpleStimWindow(QMainWindow):
         v.addWidget(self.imageview)
 
         ctl_box = QGroupBox("Controls"); grid=QGridLayout(ctl_box)
+        ctl_box.setMinimumWidth(500)
+        ctl_box.setMaximumWidth(620)
+        ctl_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        image_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
 
 
@@ -399,10 +453,13 @@ class SimpleStimWindow(QMainWindow):
         grid.addWidget(self.snap_btn,0,0); grid.addWidget(self.load_affine_btn,0,1); grid.addWidget(self.load_old_affine_btn,0,2)
 
         # Row 1: ROI
-        self.make_mask_btn=QPushButton("Make DMD Mask from ROIs"); self.current_rect_label=QLabel("ROIs: -")
-        self.delete_roi_btn=QPushButton("Delete ROI"); self.clear_roi_btn=QPushButton("Clear ROIs")
+        self.make_mask_btn=QPushButton("Make DMD Mask from ROIs"); 
+        #self.current_rect_label=QLabel("ROIs: -")
+        self.delete_roi_btn=QPushButton("Delete ROI"); 
+        self.clear_roi_btn=QPushButton("Clear ROIs")
+        
         grid.addWidget(self.make_mask_btn,1,0)
-        grid.addWidget(self.current_rect_label,1,1,1,3)
+        #grid.addWidget(self.current_rect_label,1,1,1,3)
         grid.addWidget(self.delete_roi_btn,1,4)
         grid.addWidget(self.clear_roi_btn,1,5)
 
@@ -453,11 +510,43 @@ class SimpleStimWindow(QMainWindow):
 
         # Row 8: Arduino
         self.port_edit=QLineEdit("COM13"); self.connect_btn=QPushButton("Connect Arduino")
-        grid.addWidget(QLabel("Arduino Port:"),8,0); grid.addWidget(self.port_edit,8,1); grid.addWidget(self.connect_btn,8,2)
+        grid.addWidget(QLabel("Arduino Port:"),8,0)
+        grid.addWidget(self.port_edit,8,1)
+        grid.addWidget(self.connect_btn,8,2)
+
+        # Row 9: ROI information
+        self.roi_info_title = QLabel("ROI information")
+        self.roi_info_title.setStyleSheet("font-weight: bold;")
+
+        self.current_rect_label = QLabel("ROIs: -")
+        self.current_rect_label.setWordWrap(True)
+        self.current_rect_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.current_rect_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        # Prevent the label from forcing the controls panel wider.
+        self.current_rect_label.setMinimumWidth(0)
+        self.current_rect_label.setMaximumWidth(16777215)
+        self.current_rect_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        # Reserve space for several lines so the panel height remains stable.
+        self.current_rect_label.setMinimumHeight(65)
+        self.current_rect_label.setStyleSheet(
+            """
+            QLabel {
+                border: 1px solid #b8b8b8;
+                border-radius: 3px;
+                padding: 5px;
+                background-color: #f7f7f7;
+            }
+            """
+        )
+
+        grid.addWidget(self.roi_info_title, 9, 0, 1, 6)
+        grid.addWidget(self.current_rect_label, 10, 0, 1, 6)
 
         main = QHBoxLayout(central)
-        main.addWidget(image_box, 4)
-        main.addWidget(ctl_box, 1)
+        main.addWidget(image_box, 1)
+        main.addWidget(ctl_box, 0)
 
         self._setup_imageview_roi()
         self.setStatusBar(QStatusBar(self)); exit_act=QAction("&Exit",self); exit_act.triggered.connect(self.close); self.menuBar().addMenu("&File").addAction(exit_act)
@@ -778,13 +867,41 @@ Details: {e}
     @Slot(bool)
     def on_stdp_toggled(self, checked: bool):
         self._update_stdp_attrs_from_controls()
+
+        vb = self._get_viewbox()
+        saved_view_rect = None
+
+        if vb is not None:
+            try:
+                saved_view_rect = vb.viewRect()
+                vb.disableAutoRange()
+            except Exception:
+                pass
+
         if checked:
-            self.statusBar().showMessage("STDP mode enabled. Draw or adjust one ROI to create the paired ROI.", 4000)
+            self.statusBar().showMessage(
+                "STDP mode enabled. Draw or adjust one ROI to create the paired ROI.",
+                4000,
+            )
             self._ensure_stdp_pair(self.active_roi)
         else:
             self._disable_stdp_pairing()
-            self.statusBar().showMessage("STDP mode disabled. Multi-ROI behavior restored.", 4000)
+            self.statusBar().showMessage(
+                "STDP mode disabled. Multi-ROI behavior restored.",
+                4000,
+            )
+
         self._on_pg_roi_changed()
+
+        if vb is not None:
+            try:
+                if saved_view_rect is not None:
+                    vb.setRange(saved_view_rect, padding=0)
+            finally:
+                try:
+                    vb.enableAutoRange()
+                except Exception:
+                    pass
 
     @Slot(float)
     def on_stdp_distance_changed(self, value: float):
@@ -998,9 +1115,13 @@ Details: {e}
                 x1, y1, w1, h1 = roi1
                 x2, y2, w2, h2 = roi2
                 self.current_rect_label.setText(
-                    f"STDP | ROI1 x={int(x1)}, y={int(y1)}, w={int(w1)}, h={int(h1)} | "
-                    f"ROI2 x={int(x2)}, y={int(y2)}, w={int(w2)}, h={int(h2)} | "
-                    f"d={int(round(self.stdp_distance_px))} px {self._stdp_direction}"
+                    "STDP\n"
+                    f"ROI 1: x={int(x1)}, y={int(y1)}, "
+                    f"w={int(w1)}, h={int(h1)}\n"
+                    f"ROI 2: x={int(x2)}, y={int(y2)}, "
+                    f"w={int(w2)}, h={int(h2)}\n"
+                    f"Distance: {int(round(self.stdp_distance_px))} px\n"
+                    f"Direction: {self._stdp_direction}"
                 )
                 return
         active_idx = self._active_roi_index()
@@ -1309,9 +1430,27 @@ Details: {e}
         if on_ms>=period_ms:
             on_ms=max(1,period_ms-1)
             self.statusBar().showMessage(f"On-time clamped to {on_ms} ms (< period {period_ms} ms).", 4000)
-        ok=self.arduino_comm.send_message([1],period_ms,on_ms)
-        if ok: self.statusBar().showMessage("Manual pulse sent.",2000)
-        else: QMessageBox.critical(self,"Arduino","No ACK from Arduino (manual pulse).")
+        if self._is_stdp_active():
+            # For STDP 4-field mode: [0,1],period_ms,on_time_ms,ISI_ms
+            # ISI (inter-stimulus interval) is derived from stdp_distance_px
+            isi_ms = int(min(1000, max(1, round(self.stdp_distance_px))))
+            period_ms_stdp, on_ms_stdp, isi_ms_stdp = build_stdp_message_payload(
+                period_ms,
+                on_ms,
+                isi_ms
+            )
+            ok = self.arduino_comm.send_stdp_message(period_ms_stdp, on_ms_stdp, isi_ms_stdp)
+            if ok:
+                self.statusBar().showMessage("STDP protocol command sent.", 2000)
+            else:
+                QMessageBox.critical(self, "Arduino", "No ACK from Arduino (STDP pulse).")
+            return
+
+        ok = self.arduino_comm.send_message([1], period_ms, on_ms)
+        if ok:
+            self.statusBar().showMessage("Manual pulse sent.", 2000)
+        else:
+            QMessageBox.critical(self, "Arduino", "No ACK from Arduino (manual pulse).")
 
     @Slot()
     def on_run(self):
@@ -1331,7 +1470,16 @@ Details: {e}
         if self.worker and self.worker.isRunning():
             QMessageBox.warning(self,"Stim","A stimulation run is already active."); return
 
-        self.worker=StimWorker(self.arduino_comm,period_ms,on_ms,total_pulses,self)
+        self.worker = StimWorker(
+            self.arduino_comm,
+            period_ms,
+            on_ms,
+            total_pulses,
+            self,
+            use_stdp=self._is_stdp_active(),
+            stdp_distance_px=self.stdp_distance_px,
+            duration_s=T,
+        )
         self.worker.progress.connect(self._on_worker_progress); self.worker.finished.connect(self._on_worker_finished)
 
         self.status_lbl.setText(f"Running: {total_pulses} pulses @ {f:.2f} Hz (period {period_ms} ms, on {on_ms} ms)")

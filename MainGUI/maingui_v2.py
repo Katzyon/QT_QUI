@@ -85,11 +85,9 @@ import RandomGroupCells as rgc# in development folder
 import serial # for serial communication with the Arduino COM13 that triggers the DMD, light source, and MaxOne digipins.
 from arduino_comm import ArduinoComm
 
-# Optional: lightweight ROI→DMD stim tool (integrated via menu action)
-try:
-    from simple_dmd_stim_gui_v2 import SimpleStimWindow
-except Exception:
-    SimpleStimWindow = None
+# User tab selection
+from simple_dmd_stim_gui_v3 import SimpleStimWindow
+
 
 from runProtocol import ProtocolRunner # run the protocol - create the sequence of images to be displayed on the DMD
 from protocolLoader import ProtocolLoader as pl

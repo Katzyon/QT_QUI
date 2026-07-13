@@ -77,19 +77,58 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
         self.df = pd.DataFrame()
         self.protocol_name = ""
 
+    def _is_stdp_stage(self) -> bool:
+        return self.stim_type.currentText().strip().upper() in {"STDP", "DTSP"}
+
+    def _validated_float(self, widget, field_name, default=0.0, allow_zero=True):
+        text = widget.text().strip()
+        if not text:
+            return default
+        try:
+            value = float(text)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be a number.") from exc
+        if not allow_zero and value <= 0:
+            raise ValueError(f"{field_name} must be greater than zero.")
+        return value
+
+    def _validated_int(self, widget, field_name, default=0, allow_zero=True):
+        text = widget.text().strip()
+        if not text:
+            return default
+        try:
+            value = int(float(text))
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an integer.") from exc
+        if not allow_zero and value <= 0:
+            raise ValueError(f"{field_name} must be greater than zero.")
+        return value
+
     def get_stage_data(self):
         # Initialize the stage data dictionary
+        is_stdp = self._is_stdp_stage()
+        if is_stdp:
+            dt = self._validated_float(self.stdp_dt, "STDP dt", default=10.0, allow_zero=False)
+            ipi = self._validated_float(self.stdp_ipi, "STDP IPI", default=400.0, allow_zero=False)
+            groups_number = 2
+            group_size = max(1, self._validated_int(self.group_size, "Group size", default=1, allow_zero=False))
+        else:
+            dt = self._validated_float(self.stdp_dt, "STDP dt", default=0.0)
+            ipi = self._validated_float(self.stdp_ipi, "STDP IPI", default=0.0)
+            groups_number = self._validated_int(self.groups_number, "Groups number", default=1, allow_zero=False)
+            group_size = self._validated_int(self.group_size, "Group size", default=1, allow_zero=False)
+
         stage_data = {
             "stim_type": self.stim_type.currentText(),
             "jitter": self.jitter.isChecked(),
-            "background_freq": self.background_freq.text(),
-            "groups_period": self.groups_period.text(),  # stimulation frequency in Hz for each group (whole sequence cycle)
-            "group_size": self.group_size.text(),
-            "groups_number": self.groups_number.text(),  # number of groups
-            "stim_time": self.stim_time.text(),
-            "on_time": self.on_time.text(),  # onTime
-            "dt": self.stdp_dt.text(),
-            "IPI": self.stdp_ipi.text(),
+            "background_freq": self._validated_float(self.background_freq, "Background frequency", default=0.0),
+            "groups_period": self._validated_int(self.groups_period, "Groups period", default=0, allow_zero=False),  # stimulation frequency in Hz for each group (whole sequence cycle)
+            "group_size": group_size,
+            "groups_number": groups_number,  # number of groups
+            "stim_time": self._validated_float(self.stim_time, "Stim time", default=0.0, allow_zero=False),
+            "on_time": self._validated_int(self.on_time, "On time", default=0, allow_zero=False),  # onTime
+            "dt": dt,
+            "IPI": ipi,
             "is_manual_sequence": self.is_manual_sequence.isChecked(),
             "prob_stim": self.prob_stim.isChecked(),
             "record_stage": self.record_stage.isChecked(),
@@ -106,6 +145,10 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
         else:
             stage_data['output_group'] = []  # Default to an empty list if out_group is invalid
 
+        if is_stdp:
+            stage_data["stim_type"] = "STDP"
+            stage_data["groups_number"] = 2
+
         return stage_data
     
 
@@ -114,8 +157,13 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
         """ add a new stage to the protocol which includes the parameters of the protocol
         """
 
-        # Get stage data from dialog and add to table of stages
-        stage_data = self.get_stage_data()
+        try:
+            # Get stage data from dialog and add to table of stages
+            stage_data = self.get_stage_data()
+        except ValueError as e:
+            self.show_message("Invalid stage", str(e), QMessageBox.Warning)
+            return
+
         # print the stage data to listWidget
         self.listWidget.addItem(str(stage_data))
 
@@ -156,6 +204,10 @@ class protocol_set(QDialog, Ui_protocols): # called by MainGUI when the user cli
         user_input = simpledialog.askstring("Protocol Name", "Please name the protocol:")
         # Print or use the input
         
+        if not user_input:
+            self.show_message("Protocol Name", "Protocol name was cancelled or empty.", QMessageBox.Warning)
+            return
+
         # add the protocol name to the prefix
         self.protocol_name = prefix + "_" + user_input # contain the date and time and the protocol name from the user dialog
         

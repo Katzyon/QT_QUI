@@ -1,5 +1,28 @@
+import math
 import time
 import serial
+
+
+def build_stdp_message_payload(period_ms, on_time_ms, isi_ms):
+    """
+    Build the STDP parameters for the Arduino 4-field pair-playback mode.
+    
+    Arduino 4-field mode expects: [img1,img2],period_ms,on_time_ms,ISI_ms
+    
+    Args:
+        period_ms: Period between repetitions of the pair (in milliseconds)
+        on_time_ms: Light/trigger ON time (in milliseconds)
+        isi_ms: Inter-stimulus interval between image 1 and image 2 (in milliseconds)
+    
+    Returns:
+        (period_ms, on_time_ms, isi_ms) - validated and ready to send
+    """
+    period_ms = max(1, int(period_ms))
+    on_time_ms = max(1, int(on_time_ms))
+    isi_ms = max(1, int(isi_ms))
+    
+    return period_ms, on_time_ms, isi_ms
+
 
 class ArduinoComm:
     def __init__(self, arduino, timeout=5):
@@ -31,13 +54,44 @@ class ArduinoComm:
 
         return self._wait_for_ack()
 
-    def send_stdp_message(self, dt, IPI, Tmin, on_time):
-        """Send a paired-STDP protocol command as 'dt,IPI,Tmin,on_time\\n'."""
-        message = f"{dt},{IPI},{Tmin},{on_time}\n"
+    def send_stdp_message(
+        self,
+        period_ms,
+        on_time_ms,
+        isi_ms,
+        pair_count,
+    ):
+        """
+        Send a 4-field STDP pair-playback command in the format:
+        [0,1],period_ms,on_time_ms,ISI_ms
+        
+        This tells Arduino to:
+        1. Display image 0 (stdp_mask_1)
+        2. Wait ISI_ms
+        3. Display image 1 (stdp_mask_2)
+        4. Wait until full period_ms from start of image 0
+        5. Repeat the pair
+        
+        Args:
+            period_ms: Period between pair repetitions (in milliseconds)
+            on_time_ms: Light ON time (in milliseconds)
+            isi_ms: Inter-stimulus interval between image 0 and image 1 (in milliseconds)
+        """
+        period_ms = max(1, int(period_ms))
+        on_time_ms = max(1, int(on_time_ms))
+        isi_ms = max(1, int(isi_ms))
+        pair_count = max(1, int(pair_count))
+
+        # Use 1 and 2 to match regular protocol's 1-based digipin IDs.
+        message = (
+            f"[1,2],{period_ms},{on_time_ms},"
+            f"{isi_ms},{pair_count}\n"
+        )
 
         if len(message.encode()) > 62:
             raise ValueError("STDP message too long for Arduino serial buffer (max ~62 bytes)")
 
+        print(f"Sending STDP message to Arduino: {message.strip()}")
         self.arduino.reset_input_buffer()
         self.arduino.write(message.encode())
 
@@ -49,6 +103,7 @@ class ArduinoComm:
             if self.arduino.in_waiting > 0:
                 try:
                     response = self.arduino.readline().decode().strip()
+                    print(f"Arduino response: {response}")
                     if response == "Message received":
                         return True
                 except Exception as e:

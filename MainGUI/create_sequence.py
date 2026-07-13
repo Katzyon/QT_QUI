@@ -19,10 +19,10 @@ def _build_group_images(stage, groups=None):
 
 
 def create_stdp_sequence(stage):
-    """Create an STDP sequence from Simple GUI masks or cell groups."""
+    """Create an alternating two-image STDP sequence."""
     from math import ceil
 
-    if getattr(stage, "use_stdp_masks", False):
+    if getattr(stage, "use_roi", False):
         mask_1 = cv2.imread(
             stage.stdp_mask_1_path,
             cv2.IMREAD_GRAYSCALE,
@@ -47,12 +47,8 @@ def create_stdp_sequence(stage):
 
         if mask_1.shape != mask_2.shape:
             raise ValueError(
-                "STDP masks have different dimensions: "
-                f"{mask_1.shape} and {mask_2.shape}"
+                "STDP ROI masks have different dimensions."
             )
-
-        mask_1 = np.where(mask_1 > 0, 255, 0).astype(np.uint8)
-        mask_2 = np.where(mask_2 > 0, 255, 0).astype(np.uint8)
 
         stage.groups_images = [
             np.ascontiguousarray(mask_1),
@@ -72,12 +68,14 @@ def create_stdp_sequence(stage):
         if stage.is_manual:
             if len(stage.groups) != 2:
                 raise ValueError(
-                    "STDP requires exactly two manual groups."
+                    "STDP protocol requires exactly "
+                    "two manual groups."
                 )
         else:
             if stage.group_size * 2 > len(available_cells):
                 raise ValueError(
-                    "Not enough cells for two STDP groups."
+                    "Not enough cells to create two "
+                    "non-overlapping STDP groups."
                 )
 
             stage.groups = []
@@ -105,11 +103,18 @@ def create_stdp_sequence(stage):
             "STDP IPI must be positive."
         )
 
-    total_duration_ms = float(stage.stim_time) * 60_000.0
+    total_duration_ms = (
+        float(stage.stim_time)
+        * 60.0
+        * 1000.0
+    )
 
     n_pairs = max(
         1,
-        ceil(total_duration_ms / float(stage.IPI)),
+        ceil(
+            total_duration_ms
+            / float(stage.IPI)
+        ),
     )
 
     stage.n_stdp_pairs = n_pairs    

@@ -109,11 +109,17 @@ class ProtocolRunner(QThread):
                     
                     unique_stage_id = (protocol_repeat_idx+1) * len(self.stages) + stage_index
                     
-                    # if index 0 update and save the culture and the protocol ????
+                    # Init the protocol directory and save the protocol only once at the start of the first stage of the first repeat
                     if protocol_repeat_idx == 0 and stage_index == 0:
-                        self.protocol.save_protocol(self.culture.protocols_number)
-                        ### Update the culture object with the sequence of the stage
-                        # create protocol index folder to save the protocol and stage data
+                        self.protocol.prepare_protocol_directory(
+                            self.culture.protocols_number
+                        )
+
+                        self.protocol.snapshot_all_stdp_masks()
+
+                        self.protocol.save_protocol(
+                            self.culture.protocols_number
+                        )
 
                     sequence = stage.sequence
                     arduino_buffer = stage.ard_buffer # number of integers to be sent to the Arduino buffer - to sync with MaxOne

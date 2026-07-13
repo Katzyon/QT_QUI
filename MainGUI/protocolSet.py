@@ -13,6 +13,8 @@ from Protocol import Stage
 import ast
 import pickle
 import os
+import shutil
+
 
 
 class ProtocolSet():
@@ -22,6 +24,7 @@ class ProtocolSet():
         def __init__(self, gui):
             super(ProtocolSet, self).__init__()
             self.roi_mask_path = getattr(gui, "roi_dmd_mask_path", None)
+            self.roi_directory = getattr(gui, "ROI_dir", None)
             self.stages_table = gui.stages_table # dataframe of the protocol
             self.manual_sequence = gui.manual_sequence # list of manually selected groups
             self.manual_groups = gui.manualGroups # list of manually selected groups
@@ -103,6 +106,7 @@ class ProtocolSet():
             stage.use_roi = bool(row.get("use_roi", False))
             stage.roi_mask_path = getattr(self, "roi_mask_path", None)
 
+
             if stage.stim_type == "STDP":
                 if not self.roi_directory:
                     raise FileNotFoundError(
@@ -159,10 +163,21 @@ class ProtocolSet():
                 print("protocolSet number of groups:", stage.groups_number)
                 print("protocolSet Manual groups:", stage.manual_groups)
 
-            if stage.use_roi and stage.is_manual:
-                raise ValueError("Invalid stage configuration: both Manual Groups and ROI are enabled. Choose only one.")
+            stage.use_roi = bool(row.get("use_roi", False))
+            stage.roi_mask_path = getattr(
+                self,
+                "roi_mask_path",
+                None,
+            )
 
-                           
+            if stage.stim_type == "STDP" and stage.use_roi:
+                self._snapshot_stdp_masks(stage)
+
+            if stage.use_roi and stage.is_manual:
+                raise ValueError(
+                    "Invalid stage configuration: both Manual Groups "
+                    "and ROI are enabled. Choose only one."
+                )   
 
             stage.create_sequence_pointer() # 
             stage.calc_interMaskInterval()
@@ -178,20 +193,125 @@ class ProtocolSet():
                 # (4, "Spontaneous") - randomize stimulation to all cells in the culture (no groups)
                 #print("stimType:", stage.stimType)
 
+        
+        def snapshot_stdp_masks(self, stage, protocol_dir):
+            """
+            Copy the current STDP ROI masks into the protocol-specific directory.
+            """
+            if stage.stim_type != "STDP" or not stage.use_roi:
+                return
+
+            if not self.roi_directory:
+                raise FileNotFoundError(
+                    "ROI directory is not defined."
+                )
+
+            source_mask_1 = os.path.join(
+                self.roi_directory,
+                "stdp_roi1_mask.bmp",
+            )
+
+            source_mask_2 = os.path.join(
+                self.roi_directory,
+                "stdp_roi2_mask.bmp",
+            )
+
+            missing = [
+                path
+                for path in (source_mask_1, source_mask_2)
+                if not os.path.isfile(path)
+            ]
+
+            if missing:
+                raise FileNotFoundError(
+                    "STDP ROI masks are missing. "
+                    "Create the STDP masks in Simple DMD Stim first:\n"
+                    + "\n".join(missing)
+                )
+
+            os.makedirs(protocol_dir, exist_ok=True)
+
+            destination_mask_1 = os.path.join(
+                protocol_dir,
+                f"stage_{stage.number}_stdp_roi1_mask.bmp",
+            )
+
+            destination_mask_2 = os.path.join(
+                protocol_dir,
+                f"stage_{stage.number}_stdp_roi2_mask.bmp",
+            )
+
+            shutil.copy2(
+                source_mask_1,
+                destination_mask_1,
+            )
+
+            shutil.copy2(
+                source_mask_2,
+                destination_mask_2,
+            )
+
+            stage.stdp_mask_1_path = destination_mask_1
+            stage.stdp_mask_2_path = destination_mask_2
+
+            print(
+                "STDP masks copied:",
+                destination_mask_1,
+                destination_mask_2,
+            )
+
+
+        def snapshot_all_stdp_masks(self):
+            """
+            Copy STDP masks for every ROI-based STDP stage into the
+            current protocol directory.
+            """
+            if not self.current_protocol_dir:
+                raise FileNotFoundError(
+                    "Current protocol directory is not defined."
+                )
+
+            for stage in self.stages:
+                if stage.stim_type == "STDP" and stage.use_roi:
+                    self.snapshot_stdp_masks(
+                        stage,
+                        self.current_protocol_dir,
+                    )
+        
+
+        def prepare_protocol_directory(self, protocols_number):
+            self.current_protocol_dir = os.path.join(
+                self.protocols_directory,
+                f"Protocol_{protocols_number}",
+            )
+
+            os.makedirs(
+                self.current_protocol_dir,
+                exist_ok=True,
+            )
+
+            return self.current_protocol_dir
+
+ 
         def save_protocol(self, protocols_number):
-            """ Save the protocol to a pickle file. """
+            if not self.current_protocol_dir:
+                self.prepare_protocol_directory(
+                    protocols_number
+                )
 
-            # Create directory for this protocol
-            self.current_protocol_dir = os.path.join(self.protocols_directory, f"Protocol_{protocols_number}")
-            os.makedirs(self.current_protocol_dir, exist_ok=True)
-
-
-            # Save the current protocol object (which includes the selected protocol)
             file_name = f"protocol_{protocols_number}.pkl"
-            file_path = os.path.join(self.current_protocol_dir, file_name)
-            with open(file_path, 'wb') as culture_file:
+            file_path = os.path.join(
+                self.current_protocol_dir,
+                file_name,
+            )
+
+            with open(file_path, "wb") as culture_file:
                 pickle.dump(self, culture_file)
-            print(f"Protocol {protocols_number} saved to '{file_path}'")
+
+            print(
+                f"Protocol {protocols_number} saved to "
+                f"'{file_path}'"
+            )
 
 
 

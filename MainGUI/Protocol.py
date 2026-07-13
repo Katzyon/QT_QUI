@@ -76,6 +76,8 @@ class Stage: # called by protocolSet.py
         self.use_stdp_masks = False
         self.n_stdp_pairs = 0        
         self.actual_stim_time_s = 0.0 # actual stimulation time in seconds (for STDP, it may be longer than the requested stim_time due to IPI)
+        self.stdp_mask_1_path = None
+        self.stdp_mask_2_path = None
         
     def __getstate__(self):
         state = self.__dict__.copy()

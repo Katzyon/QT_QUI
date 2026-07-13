@@ -549,8 +549,17 @@ class SimpleStimWindow(QMainWindow):
         main.addWidget(ctl_box, 0)
 
         self._setup_imageview_roi()
-        self.setStatusBar(QStatusBar(self)); exit_act=QAction("&Exit",self); exit_act.triggered.connect(self.close); self.menuBar().addMenu("&File").addAction(exit_act)
+        #self.setStatusBar(QStatusBar(self)); exit_act=QAction("&Exit",self); exit_act.triggered.connect(self.close); self.menuBar().addMenu("&File").addAction(exit_act)
 
+        self.statusBar().setStyleSheet("""
+            QStatusBar {
+                border-top: 1px solid lightgray;
+            }
+            QStatusBar QLabel {
+                color: red;
+                font-weight: bold;
+            }
+        """)
     
     
     def _connect_signals(self):
@@ -1369,7 +1378,7 @@ Details: {e}
             self.core.set_slm_image(self.slm_name,self.slm_mask)
             time.sleep(0.05)
             self.core.display_slm_image(self.slm_name)
-            self.statusBar().showMessage("Mask applied to DMD.",2000)
+            self.statusBar().showMessage("Mask applied to DMD.",1000)
         except Exception as e:
             QMessageBox.critical(self,"DMD Error",f"Failed to send mask to DMD: {e}")
 
@@ -1439,7 +1448,15 @@ Details: {e}
                 on_ms,
                 isi_ms
             )
-            ok = self.arduino_comm.send_stdp_message(period_ms_stdp, on_ms_stdp, isi_ms_stdp)
+            #ok = self.arduino_comm.send_stdp_message(period_ms_stdp, period_ms_stdp, isi_ms_stdp)
+
+            ok = self.arduino_comm.send_stdp_message(
+                period_ms=period_ms_stdp,
+                on_time_ms=period_ms_stdp,
+                isi_ms=isi_ms_stdp,
+                pair_count=1,
+            )
+
             if ok:
                 self.statusBar().showMessage("STDP protocol command sent.", 2000)
             else:

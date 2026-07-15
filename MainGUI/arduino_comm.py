@@ -62,36 +62,28 @@ class ArduinoComm:
         pair_count,
     ):
         """
-        Send a 4-field STDP pair-playback command in the format:
-        [0,1],period_ms,on_time_ms,ISI_ms
-        
-        This tells Arduino to:
-        1. Display image 0 (stdp_mask_1)
-        2. Wait ISI_ms
-        3. Display image 1 (stdp_mask_2)
-        4. Wait until full period_ms from start of image 0
-        5. Repeat the pair
-        
-        Args:
-            period_ms: Period between pair repetitions (in milliseconds)
-            on_time_ms: Light ON time (in milliseconds)
-            isi_ms: Inter-stimulus interval between image 0 and image 1 (in milliseconds)
+        Send a finite STDP command:
+
+        [1,2],period_ms,on_time_ms,isi_ms,pair_count
         """
         period_ms = max(1, int(period_ms))
         on_time_ms = max(1, int(on_time_ms))
         isi_ms = max(1, int(isi_ms))
         pair_count = max(1, int(pair_count))
 
-        # Use 1 and 2 to match regular protocol's 1-based digipin IDs.
         message = (
             f"[1,2],{period_ms},{on_time_ms},"
             f"{isi_ms},{pair_count}\n"
         )
 
         if len(message.encode()) > 62:
-            raise ValueError("STDP message too long for Arduino serial buffer (max ~62 bytes)")
+            raise ValueError(
+                "STDP message too long for Arduino serial buffer "
+                "(max approximately 62 bytes)"
+            )
 
         print(f"Sending STDP message to Arduino: {message.strip()}")
+
         self.arduino.reset_input_buffer()
         self.arduino.write(message.encode())
 

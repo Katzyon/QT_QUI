@@ -164,14 +164,7 @@ class ProtocolSet():
                 print("protocolSet Manual groups:", stage.manual_groups)
 
             stage.use_roi = bool(row.get("use_roi", False))
-            stage.roi_mask_path = getattr(
-                self,
-                "roi_mask_path",
-                None,
-            )
-
-            if stage.stim_type == "STDP" and stage.use_roi:
-                self._snapshot_stdp_masks(stage)
+            stage.roi_mask_path = getattr(self, "roi_mask_path", None)
 
             if stage.use_roi and stage.is_manual:
                 raise ValueError(

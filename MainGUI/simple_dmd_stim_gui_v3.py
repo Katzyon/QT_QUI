@@ -186,38 +186,65 @@ class StimWorker(QThread):
 
         if self.use_stdp:
             try:
-                # For STDP 4-field mode: [0,1],period_ms,on_time_ms,ISI_ms
-                # ISI (inter-stimulus interval) is derived from stdp_distance_px
-                isi_ms = int(min(1000, max(1, round(self.stdp_distance_px))))
-                period_ms_stdp, on_ms_stdp, isi_ms_stdp = build_stdp_message_payload(
-                    self.period_ms,
-                    self.on_time_ms,
-                    isi_ms
+                # STDP finite-command format:
+                # [1,2],period_ms,on_time_ms,isi_ms,pair_count
+
+                isi_ms = int(
+                    min(1000, max(1, round(self.stdp_distance_px)))
                 )
-                ok = self.arduino.send_stdp_message(period_ms_stdp, on_ms_stdp, isi_ms_stdp)
+
+                period_ms_stdp, on_ms_stdp, isi_ms_stdp = (
+                    build_stdp_message_payload(
+                        self.period_ms,
+                        self.on_time_ms,
+                        isi_ms,
+                    )
+                )
+
+                # In on_run(), total_pulses is calculated from:
+                # floor(frequency * duration).
+                # In STDP mode, this is the number of complete STDP pairs.
+                pair_count = max(1, int(self.total))
+
+                ok = self.arduino.send_stdp_message(
+                    period_ms=period_ms_stdp,
+                    on_time_ms=on_ms_stdp,
+                    isi_ms=isi_ms_stdp,
+                    pair_count=pair_count,
+                )
+
                 if not ok:
-                    self.finished.emit(False, "Arduino did not acknowledge STDP message.")
+                    self.finished.emit(
+                        False,
+                        "Arduino did not acknowledge STDP message.",
+                    )
                     return
 
-                # Wait for Arduino to complete, but respect duration_s timeout
-                # Add 2s buffer to allow Arduino time to finish cleanly
-                timeout_s = self.duration_s + 2.0
-                start_time = time.time()
-                
-                while time.time() - start_time < timeout_s and not self._stop:
-                    resp = self.arduino.wait_for_sequence_end_blocking(self._stop_event)
-                    if resp is not None:
-                        # Arduino signaled completion before timeout
-                        self.progress.emit(self.total)
-                        self.finished.emit(True, f"STDP protocol completed ({self.total} pulses equivalent).")
-                        return
-                
-                # Timeout reached or user stopped during desired duration
-                self.progress.emit(self.total)
-                elapsed = time.time() - start_time
-                self.finished.emit(True, f"STDP protocol stopped after {elapsed:.1f}s (duration: {self.duration_s}s).")
+                # The finite Arduino command terminates by itself.
+                # Wait until the firmware prints "Sequence finished".
+                response = self.arduino.wait_for_sequence_end_blocking(
+                    stop_event=self._stop_event
+                )
+
+                if response is None:
+                    if self._stop:
+                        self.finished.emit(False, "STDP stimulation stopped.")
+                    else:
+                        self.finished.emit(
+                            False,
+                            "Arduino did not report 'Sequence finished'.",
+                        )
+                    return
+
+                self.progress.emit(pair_count)
+                self.finished.emit(
+                    True,
+                    f"STDP protocol completed: {pair_count} pairs.",
+                )
+
             except Exception as e:
-                self.finished.emit(False, f"Error: {e}")
+                self.finished.emit(False, f"STDP error: {e}")
+
             return
 
         max_indices = self._max_indices_for_message()
@@ -297,7 +324,7 @@ class SimpleStimWindow(QMainWindow):
         self.arduino_comm = arduino_comm
         self.worker = None
         self.stdp_enabled = False
-        self.stdp_distance_px = 300.0
+        self.stdp_distance_px = 100.0
         self.stdp_roi1 = None
         self.stdp_roi2 = None
         self.stdp_mask_1 = None
@@ -1436,9 +1463,11 @@ Details: {e}
         f=max(0.1,float(self.freq_hz.value()))
         period_ms=max(1,int(round(1000.0/f)))
         on_ms=int(self.on_time_ms.value())
+
         if on_ms>=period_ms:
             on_ms=max(1,period_ms-1)
             self.statusBar().showMessage(f"On-time clamped to {on_ms} ms (< period {period_ms} ms).", 4000)
+
         if self._is_stdp_active():
             # For STDP 4-field mode: [0,1],period_ms,on_time_ms,ISI_ms
             # ISI (inter-stimulus interval) is derived from stdp_distance_px
@@ -1448,11 +1477,11 @@ Details: {e}
                 on_ms,
                 isi_ms
             )
-            #ok = self.arduino_comm.send_stdp_message(period_ms_stdp, period_ms_stdp, isi_ms_stdp)
+            
 
             ok = self.arduino_comm.send_stdp_message(
                 period_ms=period_ms_stdp,
-                on_time_ms=period_ms_stdp,
+                on_time_ms=on_ms_stdp,
                 isi_ms=isi_ms_stdp,
                 pair_count=1,
             )

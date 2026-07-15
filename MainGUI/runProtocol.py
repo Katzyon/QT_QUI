@@ -115,7 +115,7 @@ class ProtocolRunner(QThread):
                             self.culture.protocols_number
                         )
 
-                        self.protocol.snapshot_all_stdp_masks()
+                        self.protocol.snapshot_all_stdp_masks() # save the STDP masks to the protocol directory if they exist
 
                         self.protocol.save_protocol(
                             self.culture.protocols_number
